@@ -7,8 +7,8 @@
 #include "esp_netif.h"
 #include "driver/gpio.h"
 
-#define WIFI_SSID      "UPCB797E35"
-#define WIFI_PASS      "bb5zhdevFYye"
+#define WIFI_SSID      "test"
+#define WIFI_PASS      "haslo123"
 #define BLINK_GPIO     GPIO_NUM_2  // nr pinu GPIO dla LED
 
 static const char *TAG = "wifi_station"; // do logowania wiadomości

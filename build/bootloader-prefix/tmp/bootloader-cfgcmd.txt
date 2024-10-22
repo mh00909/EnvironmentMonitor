@@ -1,0 +1,1 @@
+cmd='/usr/bin/cmake;-DSDKCONFIG=/home/monika/environment_monitor/sdkconfig;-DIDF_PATH=/home/monika/esp/v5.3.1/esp-idf;-DIDF_TARGET=esp32;-DPYTHON_DEPS_CHECKED=1;-DPYTHON=python;-DEXTRA_COMPONENT_DIRS=/home/monika/esp/v5.3.1/esp-idf/components/bootloader;-DPROJECT_SOURCE_DIR=/home/monika/environment_monitor;-DIGNORE_EXTRA_COMPONENT=;-GNinja;<SOURCE_DIR><SOURCE_SUBDIR>'

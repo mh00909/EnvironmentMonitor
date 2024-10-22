@@ -16,7 +16,11 @@
     "idf.flashType": "UART",
     "files.associations": {
         "freertos.h": "c",
-        "event_groups.h": "c"
+        "event_groups.h": "c",
+        "nvs_flash.h": "c",
+        "esp_http_client.h": "c",
+        "esp_mac.h": "c",
+        "wifi_station.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc"
 }
