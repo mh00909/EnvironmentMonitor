@@ -20,7 +20,9 @@
         "nvs_flash.h": "c",
         "esp_http_client.h": "c",
         "esp_mac.h": "c",
-        "wifi_station.h": "c"
+        "wifi_station.h": "c",
+        "netdb.h": "c",
+        "string.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc"
 }

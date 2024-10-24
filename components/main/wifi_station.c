@@ -20,15 +20,15 @@ const int WIFI_FAIL_BIT = BIT1; // nieudana próba
 
 bool wifi_connected = false; 
 
-/* Event handler dla zdarzeń WiFi */
+/* Event handler dla zdarzeń wifi */
 static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) { // startuje w trybie STATION - próbuje połączyć się z siecią
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) { // startuje w trybie station - próbuje połączyć się z siecią
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) { // połączenie zerwane
       
         esp_wifi_connect();
-        ESP_LOGI(TAG, "Ponowne łączenie do WiFi...");
+        ESP_LOGI(TAG, "Rozłączono z siecią Wi-Fi STATION. Próba ponownego połączenia...");
         wifi_connected = false;  // Brak połączenia
         gpio_set_level(BLINK_GPIO, 0); // LED wyłączona, brak połączenia
     
@@ -46,20 +46,11 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
 
 void wifi_init_sta(void)
 {
-    wifi_event_group = xEventGroupCreate();
+    wifi_event_group = xEventGroupCreate(); // Grupa zdarzeń do śledzenia stanu połączenia
 
     
-    ESP_ERROR_CHECK(nvs_flash_init()); // Inicjalizacja NVS - przechowuje dane konfiguracyjne
-    
-    ESP_ERROR_CHECK(esp_netif_init()); // Inicjalizacja stosu TCP/IP
+    esp_netif_create_default_wifi_sta(); // domyślny interfejs sieciowy
 
-    
-    ESP_ERROR_CHECK(esp_event_loop_create_default()); // Inicjalizacja systemu zdarzeń
-
-    esp_netif_create_default_wifi_sta();
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
@@ -83,10 +74,11 @@ void wifi_init_sta(void)
             .threshold.authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "Inicjalizacja WiFi zakończona.");
+    ESP_LOGI(TAG, "Inicjalizacja Wi-Fi w trybie STATION zakończona.");
 }
+
 
