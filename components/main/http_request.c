@@ -20,7 +20,7 @@ void http_get_task(void *pvParameters) {
     struct addrinfo hints, *res;
     int err;
 
-    // Pętla sprawdzająca połączenie Wi-Fi
+    
     while (!wifi_connected) {
         ESP_LOGI("HTTP", "Brak połączenia z Wi-Fi. Oczekiwanie...");
         vTaskDelay(5000 / portTICK_PERIOD_MS);  // Poczekaj 5 sekund
@@ -29,12 +29,11 @@ void http_get_task(void *pvParameters) {
     ESP_LOGI("HTTP", "Połączono z Wi-Fi, rozpoczynam zapytanie HTTP...");
 
      // Zdefiniowanie właściwości połączenia dla DNS lookup
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET; 
-    hints.ai_socktype = SOCK_STREAM;
+    memset(&hints, 0, sizeof(hints)); // zeruje strukturę hints
+    hints.ai_family = AF_INET;  // ipv4
+    hints.ai_socktype = SOCK_STREAM; 
 
-    // DNS lookup
-    err = getaddrinfo(SERVER_HOST, "80", &hints, &res);  
+    err = getaddrinfo(SERVER_HOST, "80", &hints, &res);  // tłumaczenie nazwy na adres IP
     if (err != 0 || res == NULL) {
         ESP_LOGE("HTTP", "Błąd DNS lookup: %d", err);
         vTaskDelete(NULL);
@@ -44,7 +43,7 @@ void http_get_task(void *pvParameters) {
 
     dest_addr.sin_addr.s_addr = ((struct sockaddr_in *)res->ai_addr)->sin_addr.s_addr;
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(SERVER_PORT);
+    dest_addr.sin_port = htons(SERVER_PORT); // zmienia nr portu do formatu big-endian
 
     freeaddrinfo(res); 
 

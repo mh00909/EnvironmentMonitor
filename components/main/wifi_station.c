@@ -11,7 +11,7 @@
 #define WIFI_PASS      "haslo123"
 #define BLINK_GPIO     GPIO_NUM_2  // nr pinu GPIO dla LED
 
-static const char *TAG = "wifi_station"; // do logowania wiadomości
+static const char *TAG = "wifi_station"; // do logów
 
 static EventGroupHandle_t wifi_event_group; 
 
@@ -23,23 +23,23 @@ bool wifi_connected = false;
 /* Event handler dla zdarzeń wifi */
 static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) { // startuje w trybie station - próbuje połączyć się z siecią
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) { // Tryb STATION się uruchomił
         esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) { // połączenie zerwane
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) { // Rozłączenie 
       
         esp_wifi_connect();
-        ESP_LOGI(TAG, "Rozłączono z siecią Wi-Fi STATION. Próba ponownego połączenia...");
-        wifi_connected = false;  // Brak połączenia
-        gpio_set_level(BLINK_GPIO, 0); // LED wyłączona, brak połączenia
+        ESP_LOGI(TAG, "Brak połączenia z siecią Wi-Fi STATION. Próba połączenia...");
+        wifi_connected = false;  
+        gpio_set_level(BLINK_GPIO, 0); // Wyłącz LED przy braku połączenia
     
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) { // Otrzymuje adres ip
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) { // Otrzymano adres ip
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         
-        char ip_str[16];  // Buffer na adres IP 
-        esp_ip4addr_ntoa(&event->ip_info.ip, ip_str, sizeof(ip_str));
+        char ip_str[16]; 
+        esp_ip4addr_ntoa(&event->ip_info.ip, ip_str, sizeof(ip_str)); // Konwersja adresu IP na łańcuch znaków
         ESP_LOGI(TAG, "Uzyskano IP: %s", ip_str);
 
-        wifi_connected = true;  // Połączenie udane
+        wifi_connected = true;  // Połączenie aktywne
         gpio_set_level(BLINK_GPIO, 1); // LED włączona, połączenie udane
     }
 }
