@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_netif.h"
+#include "wifi_station.h"
 #include <string.h>
 
 #define AP_SSID "ESP32-AP"
@@ -19,6 +20,10 @@ void wifi_init_ap(void)
     uint8_t primary_channel;
     wifi_second_chan_t second_channel;
     esp_wifi_get_channel(&primary_channel, &second_channel);  
+
+    if(esp_wifi_get_channel(&primary_channel, &second_channel) != ESP_OK) { // Jeśli nie jest aktywny tryb STATION
+        primary_channel = 1;
+    }
 
     esp_netif_create_default_wifi_ap();  // Tworzy interfejs AP
 

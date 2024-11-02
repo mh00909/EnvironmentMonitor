@@ -29,8 +29,13 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
       
         esp_wifi_connect();
         ESP_LOGI(TAG, "Brak połączenia z siecią Wi-Fi STATION. Próba połączenia...");
-        wifi_connected = false;  
-        gpio_set_level(BLINK_GPIO, 0); // Wyłącz LED przy braku połączenia
+        
+        
+        if(wifi_connected) {
+            wifi_connected = false;
+            ESP_LOGI(TAG, "Stan wifi_connected zmieniony na: %d", wifi_connected); 
+        }
+        
     
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) { // Otrzymano adres ip
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
@@ -39,8 +44,10 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
         esp_ip4addr_ntoa(&event->ip_info.ip, ip_str, sizeof(ip_str)); // Konwersja adresu IP na łańcuch znaków
         ESP_LOGI(TAG, "Uzyskano IP: %s", ip_str);
 
-        wifi_connected = true;  // Połączenie aktywne
-        gpio_set_level(BLINK_GPIO, 1); // LED włączona, połączenie udane
+        if (!wifi_connected) {  
+            wifi_connected = true;
+            ESP_LOGI(TAG, "Stan wifi_connected zmieniony na: %d", wifi_connected);
+        }
     }
 }
 

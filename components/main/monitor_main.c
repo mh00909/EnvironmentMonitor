@@ -33,7 +33,7 @@ void led_blink_task(void *pvParameter)
             led_state = !led_state;
             vTaskDelay(500 / portTICK_PERIOD_MS);  // Miga co 0.5 s
         } else {
-            gpio_set_level(BLINK_GPIO, 1); // Świeci stale
+            gpio_set_level(BLINK_GPIO, 0); // Wyłączona dioda gdy jest połączenie
             vTaskDelay(1000 / portTICK_PERIOD_MS);  // Sprawdzaj co 1 s
         }
     }
@@ -66,16 +66,18 @@ void app_main(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));  // Ustawienie trybu AP+STA
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));  // Ustawienie trybu STA
 
 
 
     configure_led(); 
 
 
-    // Inicjalizacja STATION i AP
+    // Inicjalizacja STATION 
     wifi_init_sta();
-    wifi_init_ap();
+
+    
+    //wifi_init_ap();
 
 
     xTaskCreate(&led_blink_task, "led_blink_task", configMINIMAL_STACK_SIZE, NULL, 1, NULL); // Uruchom task do migania diodą
