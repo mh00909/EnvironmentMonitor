@@ -18,6 +18,7 @@
 #include "wifi_ap.c"
 #include "http_request.h"
 #include "wifi_ap.h"
+#include "mqtt_publisher.h"
 
 #define BLINK_GPIO 2
 
@@ -82,5 +83,6 @@ void app_main(void)
 
     xTaskCreate(&led_blink_task, "led_blink_task", configMINIMAL_STACK_SIZE, NULL, 1, NULL); // Uruchom task do migania diodą
 
-    xTaskCreate(&http_get_task, "http_get_task", 8192, NULL, 2, NULL); // Task do żądania http
+   // xTaskCreate(&http_get_task, "http_get_task", 8192, NULL, 2, NULL); // Task do żądania http
+   mqtt_initialize(); 
 }

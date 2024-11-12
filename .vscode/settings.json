@@ -22,7 +22,8 @@
         "esp_mac.h": "c",
         "wifi_station.h": "c",
         "netdb.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "mqtt_client.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc"
 }
