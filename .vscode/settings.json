@@ -23,7 +23,11 @@
         "wifi_station.h": "c",
         "netdb.h": "c",
         "string.h": "c",
-        "mqtt_client.h": "c"
+        "mqtt_client.h": "c",
+        "esp_netif.h": "c",
+        "mqtt_publisher.h": "c",
+        "http_request.h": "c",
+        "esp_log.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc"
 }

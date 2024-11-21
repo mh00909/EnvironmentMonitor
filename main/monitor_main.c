@@ -13,12 +13,16 @@
 #include "wifi_station.h"
 #include "esp_mac.h"
 #include "nvs_flash.h"
+#include "driver/i2c.h"
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
 #include "wifi_ap.c"
 #include "http_request.h"
 #include "wifi_ap.h"
 #include "mqtt_publisher.h"
+#include "bmp280_sensor.h"
+
+#include "esp_log.h"
 
 #define BLINK_GPIO 2
 
@@ -46,6 +50,8 @@ static void configure_led(void)
     gpio_reset_pin(BLINK_GPIO);  // Reset pinu
     gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);  // Ustawienie pinu jako wyjście  
 }
+#define I2C_MASTER_NUM I2C_NUM_0  // Używamy pierwszego portu I2C
+
 
 
 
@@ -76,13 +82,12 @@ void app_main(void)
 
     // Inicjalizacja STATION 
     wifi_init_sta();
-
-    
-    //wifi_init_ap();
-
+   //  ble_server_init();
 
     xTaskCreate(&led_blink_task, "led_blink_task", configMINIMAL_STACK_SIZE, NULL, 1, NULL); // Uruchom task do migania diodą
 
    // xTaskCreate(&http_get_task, "http_get_task", 8192, NULL, 2, NULL); // Task do żądania http
-   mqtt_initialize(); 
+    mqtt_initialize(); 
+
+    
 }

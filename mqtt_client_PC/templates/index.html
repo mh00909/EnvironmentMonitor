@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Data Dashboard</title>
+    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .status-container {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .status-item {
+            font-size: 20px;
+            margin: 10px 0;
+        }
+        .data-log {
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .data-item {
+            padding: 5px 0;
+            border-bottom: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>ESP32 Data Dashboard</h1>
+
+    <!-- Container for dynamic status updates -->
+    <div class="status-container">
+        <div id="temperature-status" class="status-item">Temperature: -</div>
+        <div id="pressure-status" class="status-item">Pressure: -</div>
+        <div id="light-status" class="status-item">Light: -</div>
+    </div>
+
+    <!-- Container for logged messages -->
+    <div class="data-log" id="data-container">
+        <!-- Dynamic data log -->
+    </div>
+
+    <script>
+        // Connect to WebSocket
+        const socket = io();
+
+        // Elements for status updates
+        const temperatureStatus = document.getElementById('temperature-status');
+        const pressureStatus = document.getElementById('pressure-status');
+        const lightStatus = document.getElementById('light-status');
+
+        // Data log container
+        const dataContainer = document.getElementById('data-container');
+
+        // Listen for MQTT messages from the server
+        socket.on('mqtt_message', function (message) {
+            const topic = message.topic;
+            const data = message.data;
+
+            // Update specific statuses based on topic
+            if (topic.includes('temperature')) {
+                temperatureStatus.textContent = `Temperature: ${data.temperature} °C`;
+            } else if (topic.includes('pressure')) {
+                pressureStatus.textContent = `Pressure: ${data.pressure} hPa`;
+            } else if (topic.includes('light')) {
+                lightStatus.textContent = `Light: ${data.light} lux`;
+            }
+
+            // Log all messages in the data container
+            const element = document.createElement('div');
+            element.classList.add('data-item');
+            element.textContent = `Topic: ${topic}, Data: ${JSON.stringify(data)}`;
+            dataContainer.appendChild(element);
+        });
+    </script>
+</body>
+</html>
