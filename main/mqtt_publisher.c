@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdlib.h>
+#include <time.h>
 #include "esp_wifi.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
@@ -15,7 +17,7 @@
 
 static const char *TAG = "mqtt_client";
 
-const char* broker_uri = "mqtt://192.168.0.66";
+const char* broker_uri = "mqtt://192.168.128.30";
 
 // Identyfikatory użytkownika, urządzenia i czujników
 char user_id[20] = "user1";
@@ -23,19 +25,35 @@ char device_id[20] = "device1";
 const char *photoresistor_id = "photoresistor";
 const char *bmp280_id = "bmp280";
 
-// Funkcja publikująca dane
-void publish_data(esp_mqtt_client_handle_t client, const char *user, const char *device) {
-    char light_topic[100];
-    snprintf(light_topic, sizeof(light_topic), "/%s/%s/%s/light", user, device, photoresistor_id);
 
+float generate_value(float min, float max) {
+    return min + ((float)rand() / (float)RAND_MAX) * (max - min);
+}
+
+// Funkcja publikująca dane
+// tematy: /<user_id>/<device_id>/<sensor_type>/<metric>
+void publish_data(esp_mqtt_client_handle_t client, const char *user, const char *device) {
+
+    char light_topic[100];
     char temperature_topic[100];
     char pressure_topic[100];
     snprintf(temperature_topic, sizeof(temperature_topic), "/%s/%s/%s/temperature", user, device, bmp280_id);
     snprintf(pressure_topic, sizeof(pressure_topic), "/%s/%s/%s/pressure", user, device, bmp280_id);
+    snprintf(light_topic, sizeof(light_topic), "/%s/%s/%s/light", user, device, photoresistor_id);
 
-    const char *light_data = "{\"light\": 200}";
-    const char *temperature_data = "{\"temperature\": 23.5}";
-    const char *pressure_data = "{\"pressure\": 1013.25}";
+    // Generowanie losowych wartości
+    float light = generate_value(100.0, 800.0);
+    float temperature = generate_value(20.0, 30.0); 
+    float pressure = generate_value(1000.0, 1025.0); 
+
+    // Tworzenie danych w formacie JSON
+    char light_data[50];
+    char temperature_data[50];
+    char pressure_data[50];
+    snprintf(temperature_data, sizeof(temperature_data), "{\"temperature\": %.2f}", temperature);
+    snprintf(light_data, sizeof(light_data), "{\"light\": %.2f}", light);
+    snprintf(pressure_data, sizeof(pressure_data), "{\"pressure\": %.2f}", pressure);
+    
 
     esp_mqtt_client_publish(client, light_topic, light_data, 0, 1, 0);
     ESP_LOGI(TAG, "Published light data on topic %s", light_topic);
@@ -52,7 +70,7 @@ void sensor_data_task(void *pvParameters) {
     esp_mqtt_client_handle_t client = (esp_mqtt_client_handle_t) pvParameters;
     while (1) {
         publish_data(client, user_id, device_id);
-        vTaskDelay(10000 / portTICK_PERIOD_MS);
+        vTaskDelay(10000 / portTICK_PERIOD_MS); // 10 s
     }
 }
 

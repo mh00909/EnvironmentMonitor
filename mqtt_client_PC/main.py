@@ -6,7 +6,7 @@ import json
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-BROKER = "192.168.0.66"
+BROKER = "192.168.128.30"
 TOPICS = ["/user1/device1/bmp280/temperature", "/user1/device1/bmp280/pressure", "/user1/device1/photoresistor/light"]
 
 @app.route('/')
