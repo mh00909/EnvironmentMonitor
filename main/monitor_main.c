@@ -20,7 +20,7 @@
 #include "http_request.h"
 #include "wifi_ap.h"
 #include "mqtt_publisher.h"
-#include "bmp280_sensor.h"
+
 
 #include "esp_log.h"
 
