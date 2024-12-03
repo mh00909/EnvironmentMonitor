@@ -44,161 +44,42 @@
 </head>
 <body>
 
-    <div class="container mt-4">
-        <h1 class="text-center text-primary">ESP32 Environment Monitor</h1>
-
-
-        <div class="row text-center my-4">
-            <div class="col">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">Temperature</h5>
-                        <p id="temperature-status" class="card-text display-6">-</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">Pressure</h5>
-                        <p id="pressure-status" class="card-text display-6">-</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">Light</h5>
-                        <p id="light-status" class="card-text display-6">-</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        
-        <div class="row mt-4">
-            <div class="col text-center">
-                <canvas id="temperatureChart"></canvas>
-                
-            </div>
-            <div class="col text-center">
-                <canvas id="pressureChart"></canvas>
-                
-            </div>
-            <div class="col text-center">
-                <canvas id="lightChart"></canvas>
-                
-            </div>
-        </div>
-
-        <div class="text-end my-3">
-            <button id="toggle-log-button" class="btn btn-primary mt-2" onclick="toggleLogs()">
-                <i class="fas fa-list"></i> Show Logs
-            </button>
-        </div>
-
-
-        <div id="log-section" class="card" style="display: none;">
-            <div class="card-header">
-                Data Log
-            </div>
-            <div class="card-body" id="data-container" style="max-height: 250px; overflow-y: auto;">
-     
-            </div>
-            <div class="card-footer text-end">
-                <button class="btn btn-primary mt-2" onclick="filterLogs('temperature')">Show Temperature Logs</button>
-                <button class="btn btn-primary mt-2" onclick="filterLogs('pressure')">Show Pressure Logs</button>
-                <button class="btn btn-primary mt-2" onclick="filterLogs('light')">Show Light Logs</button>
-                <button class="btn btn-secondary" onclick="filterLogs('')">Show All Logs</button>
-                <button class="btn btn-danger" onclick="clearLogs()">Clear Logs</button>
-            </div>
-        </div>
+    <div class="text-center mt-4">
+        <button onclick="switchToConfig()" class="btn btn-warning">Przejdź do konfiguracji</button>
+        <button onclick="goToData()" class="btn btn-success">Przejdź do strony z danymi</button>
     </div>
-
+    
+    <div id="mode-status" class="text-center mt-3"></div>
+   
+    
     <script>
-        const socket = io();
-        const temperatureStatus = document.getElementById('temperature-status');
-        const pressureStatus = document.getElementById('pressure-status');
-        const lightStatus = document.getElementById('light-status');
-        const dataContainer = document.getElementById('data-container');
-
-   
-        const temperatureChart = new Chart(document.getElementById('temperatureChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Temperature (°C)', data: [], borderColor: 'red', tension: 0.1 }] }
-        });
-        const pressureChart = new Chart(document.getElementById('pressureChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Pressure (hPa)', data: [], borderColor: 'blue', tension: 0.1 }] }
-        });
-        const lightChart = new Chart(document.getElementById('lightChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Light (lux)', data: [], borderColor: 'green', tension: 0.1 }] }
-        });
-
-        function updateChart(chart, label, data) {
-            if (chart.data.labels.length > 50) {
-                chart.data.labels.shift();
-                chart.data.datasets[0].data.shift();
-            }
-            chart.data.labels.push(label);
-            chart.data.datasets[0].data.push(data);
-            chart.update();
+     function switchToConfig() {
+            fetch('/switch_to_ap')
+                .then(response => {
+                    if (response.ok) {
+                        alert("ESP32 przełączane w tryb AP. Połącz się z siecią ESP32.");
+                        setTimeout(() => {
+                            window.location.href = "/wifi_config";
+                        }, 5000);
+                    } else {
+                        response.text().then(text => alert("Błąd: " + text));
+                    }
+                })
+                .catch(error => alert("Błąd połączenia: " + error));
         }
 
-        socket.on('mqtt_message', function (message) {
-            const topic = message.topic;
-            const data = message.data;
-            const timestamp = new Date().toLocaleTimeString();
-
-            if (topic.includes('temperature')) {
-                temperatureStatus.textContent = `${data.temperature} °C`;
-                updateChart(temperatureChart, timestamp, data.temperature);
-            } else if (topic.includes('pressure')) {
-                pressureStatus.textContent = `${data.pressure} hPa`;
-                updateChart(pressureChart, timestamp, data.pressure);
-            } else if (topic.includes('light')) {
-                lightStatus.textContent = `${data.light} lux`;
-                updateChart(lightChart, timestamp, data.light);
-            }
-
-            const element = document.createElement('div');
-            element.classList.add('data-item');
-            if (topic.includes('temperature')) element.classList.add('temperature');
-            else if (topic.includes('pressure')) element.classList.add('pressure');
-            else if (topic.includes('light')) element.classList.add('light');
-            element.textContent = `Topic: ${topic}, Data: ${JSON.stringify(data)}`;
-            dataContainer.appendChild(element);
-        });
-
-   
-        function filterLogs(filter) {
-            const logs = document.querySelectorAll('.data-item');
-            logs.forEach(log => {
-                if (filter === '' || log.textContent.includes(filter)) {
-                    log.style.display = '';
-                } else {
-                    log.style.display = 'none';
-                }
-            });
+        function goToData() {
+            window.location.href = "/data";
         }
-
-        function clearLogs() {
-            dataContainer.innerHTML = '';
+        function refreshMode() {
+                    fetch('/sync_mode')
+                        .then(response => response.json())
+                        .then(data => {
+                            document.getElementById('mode-status').textContent = `Tryb ESP32: ${data.mode}`;
+                        });
         }
-
-        function toggleLogs() {
-            const logSection = document.getElementById('log-section');
-            const toggleButton = document.getElementById('toggle-log-button');
-
-            if (logSection.style.display === 'none') {
-                logSection.style.display = 'block';
-                toggleButton.innerHTML = '<i class="fas fa-list"></i> Hide Logs';
-            } else {
-                logSection.style.display = 'none';
-                toggleButton.innerHTML = '<i class="fas fa-list"></i> Show Logs';
-            }
-        }
+        setInterval(refreshMode, 5000);
+        refreshMode();
     </script>
 </body>
 </html>
