@@ -16,50 +16,70 @@
             padding: 0;
             background-color: #f9f9f9;
         }
-        canvas {
-            max-width: 100%;
-            height: auto;
-        }
+    
         h1 {
             text-align: center;
             color: #333;
         }
-        .card-title {
-            font-size: 18px;
-        }
-        .data-item {
-            padding: 5px 10px;
-            border-bottom: 1px solid #ddd;
-        }
-        .data-item.temperature {
-            background-color: #ffe5e5;
-        }
-        .data-item.pressure {
-            background-color: #e5f3ff;
-        }
-        .data-item.light {
-            background-color: #e5ffe5;
-        }
+        
     </style>
 </head>
 <body>
 
     <div class="text-center mt-4">
-        <button onclick="switchToConfig()" class="btn btn-warning">Przejdź do konfiguracji</button>
         <button onclick="goToData()" class="btn btn-success">Przejdź do strony z danymi</button>
+        <div class="config-box">
+            <button onclick="switchToConfig()" class="btn btn-warning">Przejdź do konfiguracji</button>
+            <p>Aby przejść do trybu konfiguracji:</p>
+            <p>1. Kliknij przycisk BOOT na ESP32.</p>
+            <p>2. Połącz się z siecią ESP32-AP.</p>
+            <p>3. Kliknij na przycisk "Przejdź do konfiguracji".</p>
+        </div>
     </div>
     
-    <div id="mode-status" class="text-center mt-3"></div>
-   
+    <div id="mode-status">Łączenie...</div>
     
-    <script>
+<script>
+
+    const socket = new WebSocket("ws://192.168.4.1/ws");
+
+    socket.onopen = () => {
+        console.log("Połączono z WebSocket");
+    };
+
+    socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log("Odebrano wiadomość WebSocket:", data);
+        document.getElementById("mode-status").textContent = `Tryb ESP32: ${data.mode}`;
+    };
+
+    socket.onclose = () => {
+        console.log("Rozłączono z WebSocket");
+    };
+
+
+    function checkESP32Status() {
+        fetch('/sync_mode')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('mode-status').textContent = `Tryb ESP32: ${data.mode}`;
+            })
+            .catch(() => {
+                document.getElementById('mode-status').textContent = "Brak połączenia z ESP32";
+            });
+    }
+
+    // Regularne odświeżanie statusu
+    setInterval(checkESP32Status, 5000);
+    checkESP32Status();
+
      function switchToConfig() {
             fetch('/switch_to_ap')
                 .then(response => {
                     if (response.ok) {
                         alert("ESP32 przełączane w tryb AP. Połącz się z siecią ESP32.");
                         setTimeout(() => {
-                            window.location.href = "/wifi_config";
+                            window.open("/config", '_blank');
                         }, 5000);
                     } else {
                         response.text().then(text => alert("Błąd: " + text));
@@ -69,7 +89,7 @@
         }
 
         function goToData() {
-            window.location.href = "/data";
+            window.open("/data", '_blank');
         }
         function refreshMode() {
                     fetch('/sync_mode')

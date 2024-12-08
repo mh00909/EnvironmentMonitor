@@ -6,11 +6,14 @@
 #include <time.h>
 #include "esp_wifi.h"
 #include "esp_system.h"
+#include "http_server.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "wifi_ap.h"
 #include "wifi_station.h"
 #include "esp_netif.h"
+#include "bmp280.h"
+#include "i2c_driver.h"
 #include "mqtt_publisher.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -105,16 +108,18 @@ void publish_data(esp_mqtt_client_handle_t client, const char *user, const char 
 
     // Generowanie losowych wartości
     float light = generate_value(100.0, 800.0);
-    float temperature = generate_value(20.0, 30.0); 
-    float pressure = generate_value(1000.0, 1025.0); 
 
+    
+    
     // Tworzenie danych w formacie JSON
     char light_data[50];
     char temperature_data[50];
     char pressure_data[50];
-    snprintf(temperature_data, sizeof(temperature_data), "{\"temperature\": %.2f}", temperature);
+    bmp280_read_data();
+    snprintf(temperature_data, sizeof(temperature_data), "{\"temperature\": %.2f}", temp_c);
+    snprintf(pressure_data, sizeof(pressure_data), "{\"pressure\": %.2f}", press_pa/100);
+    
     snprintf(light_data, sizeof(light_data), "{\"light\": %.2f}", light);
-    snprintf(pressure_data, sizeof(pressure_data), "{\"pressure\": %.2f}", pressure);
     
     if (client_handle != NULL) {
         safe_publish(client, light_topic, light_data);
@@ -152,8 +157,6 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-            esp_mqtt_client_subscribe(client_handle, "/user1/device1/config", 0);
-            ESP_LOGI(TAG, "Subscribed to /user1/device1/config");
             break;
 
         case MQTT_EVENT_DISCONNECTED:
@@ -168,27 +171,6 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             ESP_LOGI(TAG, "MQTT_EVENT_DATA");
             printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
             printf("DATA=%.*s\r\n", event->data_len, event->data);
-
-            if (event->topic_len < sizeof(topic) && event->data_len < sizeof(payload)) {
-                memcpy(topic, event->topic, event->topic_len);
-                memcpy(payload, event->data, event->data_len);
-                topic[event->topic_len] = '\0';
-                payload[event->data_len] = '\0';
-
-                if (strcmp(topic, "/user1/device1/config") == 0) {
-                    if (strcmp(payload, "switch_to_ap") == 0) {
-                        ESP_LOGI(TAG, "Received command: switch_to_ap");
-                        xTaskNotify(config_task_handle, 1, eSetValueWithoutOverwrite);
-                    } else if (strcmp(payload, "switch_to_sta") == 0) {
-                        ESP_LOGI(TAG, "Received command: switch_to_sta");
-                        xTaskNotify(config_task_handle, 2, eSetValueWithoutOverwrite); // Przełącz na tryb STA
-                    } else {
-                        ESP_LOGW(TAG, "Unknown command: %s", payload);
-                    }
-                }
-            } else {
-                ESP_LOGW(TAG, "Received topic or payload is too long");
-            }
             
             break;
 

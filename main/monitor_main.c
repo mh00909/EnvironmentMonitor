@@ -21,6 +21,7 @@
 #include "wifi_ap.h"
 #include "mqtt_publisher.h"
 #include "bmp280.h"
+#include "http_server.h"
 #include "i2c_driver.h"
 
 #include "esp_log.h"
@@ -30,13 +31,17 @@
 
 static bool led_state = false;  // stan diody ON/OFF
 bool is_config_mode = false;
+extern httpd_handle_t server;
 
 
 /* Task migania diodą */ 
 void led_blink_task(void *pvParameter)
 {
     while (1) {
-        if (!wifi_connected) {
+        if (is_config_mode) {
+            gpio_set_level(BLINK_GPIO, 1); // stałe światło
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+        } else if (!wifi_connected) {
             gpio_set_level(BLINK_GPIO, led_state);
             led_state = !led_state;
             vTaskDelay(500 / portTICK_PERIOD_MS);  // Miga co 0.5 s
@@ -56,6 +61,7 @@ void config_mode_task(void* arg) {
             //ESP_LOGI("CONFIG", "Otrzymano powiadomienie: %u", notify_value);
 
             if (notify_value == 1) { // Przejście do trybu konfiguracji
+                notify_clients(server, "{\"mode\": \"AP\"}");
                 if (!is_config_mode) {
                     is_config_mode = true;
                     mqtt_stop();
@@ -71,6 +77,7 @@ void config_mode_task(void* arg) {
     
                 }
             } else if (notify_value == 2) { // Przejście do trybu station
+                notify_clients(server, "{\"mode\": \"STA\"}");
                 if (is_config_mode) {
                     is_config_mode = false;
                     mqtt_stop();
@@ -113,6 +120,7 @@ static void configure_led(void)
 }
 
 TaskHandle_t config_task_handle = NULL;
+
 static void IRAM_ATTR button_isr_handler(void* arg) {
     static uint32_t last_interrupt_time = 0; // Zmienna do debouncingu
     uint32_t interrupt_time = xTaskGetTickCountFromISR();
@@ -163,6 +171,12 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 
+
+    i2c_master_init();
+    vTaskDelay(pdMS_TO_TICKS(100)); 
+    bmp280_init();
+
+
     // Uruchomienie tasków
     xTaskCreate(config_mode_task, "config_mode_task", 4096, NULL, 10, &config_task_handle);
     xTaskCreate(&led_blink_task, "led_blink_task", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
@@ -174,13 +188,18 @@ void app_main(void)
     connect_to_wifi();
 
     server = start_webserver();
- 
+    notify_clients(server, "{\"mode\": \"STA\"}");
 
-    /*i2c_master_init();
+    ///
+
+
+   /* i2c_master_init();
     vTaskDelay(pdMS_TO_TICKS(100)); 
-    bmp280_test_id();
-   i2c_scan();
-   bmp280_init();
+    bmp280_init();
+
+
+    bmp280_read_calibration_data();
+    ESP_LOGI("BMP280", "Calibration data loaded.");
 
    while (1) {
         bmp280_read_data();

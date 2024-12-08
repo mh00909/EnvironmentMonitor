@@ -10,28 +10,14 @@ socketio = SocketIO(app)
 
 # Konfiguracja MQTT brokera
 BROKER = "192.168.128.30"
-TOPICS = ["/user1/device1/bmp280/temperature", "/user1/device1/bmp280/pressure", "/user1/device1/photoresistor/light", "/user1/device1/config"]
+TOPICS = ["/user1/device1/bmp280/temperature", "/user1/device1/bmp280/pressure", "/user1/device1/photoresistor/light"]
 
 # Domyślny adres ESP32 w trybie STA
 ESP32_IP = "192.168.128.123"  
 
 @app.route('/')
 def index():
-    """Strona główna z dashboardem"""
     return render_template('index.html')
-
-
-@app.route('/wifi_config')
-def wifi_config():
-    global ESP32_IP
-    ESP32_IP = "192.168.4.1"
-    try:
-        response = requests.get(f"http://{ESP32_IP}/wifi_config", timeout=5)
-        if response.status_code == 200:
-            return render_template('wifi_config.html')
-    except requests.exceptions.RequestException:
-        ESP32_IP = "192.168.128.123"  # Wróć do STA w razie problemów
-        return "ESP32 w trybie STA", 500
 
 
 def detect_esp32_mode():
@@ -70,6 +56,32 @@ def switch_to_sta():
     mqtt_client.publish("/user1/device1/config", "switch_to_sta")
     time.sleep(5)  # Poczekaj na przełączenie ESP32
     return redirect('/')
+
+
+@app.route('/config')
+def config():
+    global ESP32_IP
+    ESP32_IP = "192.168.4.1"
+    try:
+        response = requests.get(f"http://{ESP32_IP}/config", timeout=5)
+        if response.status_code == 200:
+            return render_template('config.html')
+    except requests.exceptions.RequestException:
+        ESP32_IP = "192.168.128.123"  # Wróć do STA w razie problemów
+        return "ESP32 w trybie STA", 500
+
+
+@app.route('/wifi_config')
+def wifi_config():
+    global ESP32_IP
+    ESP32_IP = "192.168.4.1"
+    try:
+        response = requests.get(f"http://{ESP32_IP}/wifi_config", timeout=5)
+        if response.status_code == 200:
+            return render_template('wifi_config.html')
+    except requests.exceptions.RequestException:
+        ESP32_IP = "192.168.128.123"  # Wróć do STA w razie problemów
+        return "ESP32 w trybie STA", 500
 
 
 @app.route('/sync_mode', methods=['GET'])
@@ -113,7 +125,6 @@ except Exception as e:
 
 @socketio.on('connect')
 def handle_web_connect():
-    """Obsługa połączenia WebSocket."""
     print("Web client connected")
 
 

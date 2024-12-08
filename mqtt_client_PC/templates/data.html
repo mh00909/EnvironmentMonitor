@@ -3,68 +3,178 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dane z ESP32</title>
-    <!-- Dodanie stylów Bootstrap -->
+    <title>ESP32 Data Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
             background-color: #f9f9f9;
         }
-        .data-entry {
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        canvas {
+            max-width: 100%;
+            height: auto;
         }
-        .data-entry.temperature {
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .card-title {
+            font-size: 18px;
+        }
+        .data-item {
+            padding: 5px 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .data-item.temperature {
             background-color: #ffe5e5;
         }
-        .data-entry.pressure {
+        .data-item.pressure {
             background-color: #e5f3ff;
         }
-        .data-entry.light {
+        .data-item.light {
             background-color: #e5ffe5;
         }
     </style>
 </head>
 <body>
+
     <div class="container mt-4">
-        <h1 class="text-center text-primary">Dane z ESP32</h1>
-        <div id="mqtt-data" class="mt-4"></div>
+        <h1 class="text-center text-primary">ESP32 Environment Monitor</h1>
+
+        <!-- Cards for displaying latest data -->
+        <div class="row text-center my-4">
+            <div class="col">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">Temperature</h5>
+                        <p id="temperature-status" class="card-text display-6">-</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">Pressure</h5>
+                        <p id="pressure-status" class="card-text display-6">-</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">Light</h5>
+                        <p id="light-status" class="card-text display-6">-</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts for visualizing data -->
+        <div class="row mt-4">
+            <div class="col text-center">
+                <canvas id="temperatureChart"></canvas>
+            </div>
+            <div class="col text-center">
+                <canvas id="pressureChart"></canvas>
+            </div>
+            <div class="col text-center">
+                <canvas id="lightChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Logs section -->
+        <div class="text-end my-3">
+            <button id="toggle-log-button" class="btn btn-primary mt-2" onclick="toggleLogs()">
+                <i class="fas fa-list"></i> Show Logs
+            </button>
+        </div>
+
+        <div id="log-section" class="card" style="display: none;">
+            <div class="card-header">
+                Data Log
+            </div>
+            <div class="card-body" id="data-container" style="max-height: 250px; overflow-y: auto;">
+            </div>
+            <div class="card-footer text-end">
+                <button class="btn btn-danger" onclick="clearLogs()">Clear Logs</button>
+            </div>
+        </div>
     </div>
 
-    <!-- Dodanie skryptu Socket.IO -->
-    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
     <script>
-        const socket = io(); // Inicjalizacja połączenia WebSocket
-        const mqttDataDiv = document.getElementById('mqtt-data'); // Kontener na dane MQTT
+        const socket = io();
+        const temperatureStatus = document.getElementById('temperature-status');
+        const pressureStatus = document.getElementById('pressure-status');
+        const lightStatus = document.getElementById('light-status');
+        const dataContainer = document.getElementById('data-container');
 
-        // Obsługa wiadomości z MQTT
+        // Initialize charts
+        const temperatureChart = new Chart(document.getElementById('temperatureChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Temperature (°C)', data: [], borderColor: 'red', tension: 0.1 }] }
+        });
+        const pressureChart = new Chart(document.getElementById('pressureChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Pressure (hPa)', data: [], borderColor: 'blue', tension: 0.1 }] }
+        });
+        const lightChart = new Chart(document.getElementById('lightChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Light (lux)', data: [], borderColor: 'green', tension: 0.1 }] }
+        });
+
+        function updateChart(chart, label, data) {
+            if (chart.data.labels.length > 50) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            chart.data.labels.push(label);
+            chart.data.datasets[0].data.push(data);
+            chart.update();
+        }
+
+        // Handle incoming MQTT messages
         socket.on('mqtt_message', function (message) {
             const topic = message.topic;
             const data = message.data;
+            const timestamp = new Date().toLocaleTimeString();
 
-            // Tworzenie elementu wyświetlającego dane
-            const element = document.createElement('div');
-            element.classList.add('data-entry');
             if (topic.includes('temperature')) {
-                element.classList.add('temperature');
-                element.innerHTML = `<strong>Temperatura:</strong> ${data.temperature} °C`;
+                temperatureStatus.textContent = `${data.temperature} °C`;
+                updateChart(temperatureChart, timestamp, data.temperature);
             } else if (topic.includes('pressure')) {
-                element.classList.add('pressure');
-                element.innerHTML = `<strong>Ciśnienie:</strong> ${data.pressure} hPa`;
+                pressureStatus.textContent = `${data.pressure} hPa`;
+                updateChart(pressureChart, timestamp, data.pressure);
             } else if (topic.includes('light')) {
-                element.classList.add('light');
-                element.innerHTML = `<strong>Światło:</strong> ${data.light} lux`;
-            } else {
-                element.innerHTML = `<strong>${topic}:</strong> ${JSON.stringify(data)}`;
+                lightStatus.textContent = `${data.light} lux`;
+                updateChart(lightChart, timestamp, data.light);
             }
 
-            // Dodanie nowego elementu do kontenera
-            mqttDataDiv.prepend(element);
+            const element = document.createElement('div');
+            element.classList.add('data-item');
+            element.textContent = `Topic: ${topic}, Data: ${JSON.stringify(data)}`;
+            dataContainer.appendChild(element);
         });
+
+        function clearLogs() {
+            dataContainer.innerHTML = '';
+        }
+
+        function toggleLogs() {
+            const logSection = document.getElementById('log-section');
+            const toggleButton = document.getElementById('toggle-log-button');
+
+            if (logSection.style.display === 'none') {
+                logSection.style.display = 'block';
+                toggleButton.innerHTML = '<i class="fas fa-list"></i> Hide Logs';
+            } else {
+                logSection.style.display = 'none';
+                toggleButton.innerHTML = '<i class="fas fa-list"></i> Show Logs';
+            }
+        }
     </script>
 </body>
 </html>
