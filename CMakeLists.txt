@@ -4,7 +4,9 @@ cmake_minimum_required(VERSION 3.16)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-set(EXTRA_COMPONENT_DIRS "$ENV{IDF_PATH}/components/mqtt")
-
+set(EXTRA_COMPONENT_DIRS 
+    "$ENV{IDF_PATH}/components/mqtt" 
+    "${CMAKE_SOURCE_DIR}/components"
+)
 
 project(environment_monitor)

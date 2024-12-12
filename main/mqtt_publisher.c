@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
@@ -39,19 +40,17 @@ SemaphoreHandle_t mqtt_mutex = NULL;
 void initialize_mqtt_mutex() {
     mqtt_mutex = xSemaphoreCreateMutex();
     if (mqtt_mutex == NULL) {
-        ESP_LOGE(TAG, "Failed to create MQTT mutex.");
+        ESP_LOGE(TAG, "Błąd przy tworzeniu mutexa MQTT.");
     }
 }
 void safe_publish(esp_mqtt_client_handle_t client, const char *topic, const char *data) {
     if (xSemaphoreTake(mqtt_mutex, portMAX_DELAY) == pdTRUE) {
         if (client != NULL) {
             esp_mqtt_client_publish(client, topic, data, 0, 1, 0);
-        } else {
-            ESP_LOGW(TAG, "MQTT client handle is NULL. Skipping publish.");
-        }
+        } 
         xSemaphoreGive(mqtt_mutex);
     } else {
-        ESP_LOGE(TAG, "Failed to take MQTT mutex.");
+        ESP_LOGE(TAG, "Błąd przy publikowaniu MQTT.");
     }
 }
 
@@ -68,16 +67,16 @@ void mqtt_stop() {
 
         esp_err_t err = esp_mqtt_client_stop(client_handle);
         if (err == ESP_OK) {
-            ESP_LOGI(TAG, "MQTT client stopped successfully.");
+            ESP_LOGI(TAG, "Pomyślnie zatrzymano klienta MQTT.");
         } else {
-            ESP_LOGE(TAG, "Failed to stop MQTT client. Error: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "Błąd przy tworzeniu klienta MQTT: %s", esp_err_to_name(err));
         }
 
         err = esp_mqtt_client_destroy(client_handle);
         if (err == ESP_OK) {
-            ESP_LOGI(TAG, "MQTT client destroyed successfully.");
+            ESP_LOGI(TAG, "Pomyślnie zniszczono klienta MQTT.");
         } else {
-            ESP_LOGE(TAG, "Failed to destroy MQTT client. Error: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "Błąd przy niszczeniu klienta MQTT: %s", esp_err_to_name(err));
         }
 
         client_handle = NULL;
@@ -85,9 +84,7 @@ void mqtt_stop() {
         if (mqtt_mutex != NULL) {
             xSemaphoreGive(mqtt_mutex); // Zwolnij mutex
         }
-    } else {
-        ESP_LOGW(TAG, "MQTT client is not running or already stopped.");
-    }
+    } 
 }
 
 
@@ -109,15 +106,17 @@ void publish_data(esp_mqtt_client_handle_t client, const char *user, const char 
     // Generowanie losowych wartości
     float light = generate_value(100.0, 800.0);
 
-    
+    float temp, press;
     
     // Tworzenie danych w formacie JSON
     char light_data[50];
     char temperature_data[50];
     char pressure_data[50];
-    bmp280_read_data();
-    snprintf(temperature_data, sizeof(temperature_data), "{\"temperature\": %.2f}", temp_c);
-    snprintf(pressure_data, sizeof(pressure_data), "{\"pressure\": %.2f}", press_pa/100);
+    bmp280_read_data(&temp, &press);
+    float pressure_sea_level = bmp280_calculate_sea_level_pressure(press/100, 220);
+    
+    snprintf(temperature_data, sizeof(temperature_data), "{\"temperature\": %.2f}", temp);
+    snprintf(pressure_data, sizeof(pressure_data), "{\"pressure\": %.2f}", pressure_sea_level);
     
     snprintf(light_data, sizeof(light_data), "{\"light\": %.2f}", light);
     
@@ -141,7 +140,7 @@ void sensor_data_task(void *pvParameters) {
         if (client_handle != NULL) {
             publish_data(client, user_id, device_id);
         } else {
-            ESP_LOGW(TAG, "MQTT client is not initialized. Skipping publish.");
+            ESP_LOGW(TAG, "Klient MQTT niezaincjalizowany, pominięcie publikacji.");
         }
         vTaskDelay(10000 / portTICK_PERIOD_MS); // 10 s
     }
@@ -187,7 +186,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 // Funkcja inicjalizująca klienta MQTT i task publikujący dane
 void mqtt_initialize(void) {
     if (client_handle != NULL) {
-        ESP_LOGW(TAG, "MQTT client is already initialized. Stopping current client.");
+        ESP_LOGW(TAG, "Klient MQTT jest już zainicjalizowny. Zatrzymanie obecnego klienta.");
         mqtt_stop();
     }
 
@@ -199,22 +198,22 @@ void mqtt_initialize(void) {
 
     client_handle = esp_mqtt_client_init(&mqtt_cfg);
     if (client_handle == NULL) {
-        ESP_LOGE(TAG, "Failed to initialize MQTT client.");
+        ESP_LOGE(TAG, "Błąd przy inicjalizacji klienta MQTT.");
         return;
     }
 
     esp_err_t err = esp_mqtt_client_register_event(client_handle, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to register MQTT event handler: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Błąd przy rejestracji klienta z uchwytem: %s", esp_err_to_name(err));
         return;
     }
 
     err = esp_mqtt_client_start(client_handle);
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "MQTT client started successfully.");
+        ESP_LOGI(TAG, "Klient MQTT zainicjalizowany pomyślnie.");
         xTaskCreate(sensor_data_task, "sensor_data_task", 4096, (void*) client_handle, 5, &sensor_data_task_handle);
     } else {
-        ESP_LOGE(TAG, "Failed to start MQTT client: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Błąd przy uruchamianiu klienta MQTT: %s", esp_err_to_name(err));
         client_handle = NULL;
     }
 }

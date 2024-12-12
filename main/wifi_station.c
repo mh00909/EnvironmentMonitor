@@ -60,7 +60,7 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
             wifi_connected = true;
         
             ESP_LOGI(TAG, "Stan wifi_connected zmieniony na: %d", wifi_connected);
-        
+            vTaskDelay(pdMS_TO_TICKS(100));
             ESP_LOGI(TAG, "Połączono z Wi-Fi. Inicjalizacja MQTT...");
             mqtt_initialize();
         }

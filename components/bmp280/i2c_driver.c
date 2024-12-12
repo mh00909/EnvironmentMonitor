@@ -18,7 +18,7 @@ void i2c_master_init() {
 }
 
 void i2c_scan() {
-    ESP_LOGI(TAG, "Starting I2C scan...");
+    ESP_LOGI(TAG, "Rozpoczęcie skanowania I2C...");
     for (uint8_t addr = 1; addr < 127; addr++) {
         i2c_cmd_handle_t cmd = i2c_cmd_link_create();
         i2c_master_start(cmd);
@@ -28,10 +28,10 @@ void i2c_scan() {
         i2c_cmd_link_delete(cmd);
 
         if (ret == ESP_OK) {
-            ESP_LOGI(TAG, "Found device at address: 0x%02X", addr);
+            ESP_LOGI(TAG, "Znaleziono urządzenie. Adres: 0x%02X", addr);
         }
     }
-    ESP_LOGI(TAG, "I2C scan complete.");
+    ESP_LOGI(TAG, "Ukończono skan I2C.");
 }
 
 esp_err_t i2c_write_register(uint8_t device_addr, uint8_t reg_addr, uint8_t data) {
@@ -45,32 +45,34 @@ esp_err_t i2c_write_register(uint8_t device_addr, uint8_t reg_addr, uint8_t data
     i2c_cmd_link_delete(cmd);
     return ret;
 }
+
+
 esp_err_t i2c_read_register(uint8_t device_addr, uint8_t reg_addr, uint8_t *data, size_t len) {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     if (cmd == NULL) {
         return ESP_FAIL;
     }
 
-    // Start condition and write to device
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, (device_addr << 1) | I2C_MASTER_WRITE, true);
     i2c_master_write_byte(cmd, reg_addr, true);
 
-    // Restart condition and read from device
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, (device_addr << 1) | I2C_MASTER_READ, true);
-    i2c_master_read(cmd, data, len, I2C_MASTER_LAST_NACK);
 
-    // Stop condition
+    if (len > 1) {
+        i2c_master_read(cmd, data, len - 1, I2C_MASTER_ACK);
+    }
+    i2c_master_read_byte(cmd, data + len - 1, I2C_MASTER_LAST_NACK);
     i2c_master_stop(cmd);
 
-    // Execute command and delete handle
     esp_err_t ret = i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, pdMS_TO_TICKS(1000));
     i2c_cmd_link_delete(cmd);
 
     if (ret != ESP_OK) {
-        ESP_LOGE("I2C_READ", "Failed to read register 0x%02X from device 0x%02X", reg_addr, device_addr);
+        ESP_LOGE("I2C_READ", "Błąd przy odczycie rejestru 0x%02X z urządzenia 0x%02X", reg_addr, device_addr);
     }
     return ret;
 }
+
 

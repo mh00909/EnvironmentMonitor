@@ -17,7 +17,6 @@
 #include "driver/i2c.h"
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
-#include "http_request.h"
 #include "wifi_ap.h"
 #include "mqtt_publisher.h"
 #include "bmp280.h"
@@ -186,7 +185,7 @@ void app_main(void)
     // Inicjalizacja Wi-Fi i innych modułów
     wifi_init_sta();
     connect_to_wifi();
-
+    vTaskDelay(pdMS_TO_TICKS(100)); 
     server = start_webserver();
     notify_clients(server, "{\"mode\": \"STA\"}");
 
