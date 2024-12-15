@@ -45,7 +45,6 @@
     <div class="container mt-4">
         <h1 class="text-center text-primary">ESP32 Environment Monitor</h1>
 
-        <!-- Cards for displaying latest data -->
         <div class="row text-center my-4">
             <div class="col">
                 <div class="card shadow-sm">
@@ -136,7 +135,6 @@
             chart.update();
         }
 
-        // Handle incoming MQTT messages
         socket.on('mqtt_message', function (message) {
             const topic = message.topic;
             const data = message.data;

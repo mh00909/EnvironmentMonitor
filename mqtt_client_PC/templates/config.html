@@ -11,13 +11,12 @@
         <h1 class="text-center text-primary">Wybierz Konfigurację</h1>
 
         <div class="d-grid gap-3 mt-4">
-            <!-- Przycisk do konfiguracji Wi-Fi -->
+          
             <button onclick="goToWiFiConfig()" class="btn btn-primary">Konfiguracja Wi-Fi</button>
+            <button onclick="goToBMP280Config()" class="btn btn-success">Konfiguracja BMP280</button>
+           <!-- <button onclick="goToMQTTConfig()" class="btn btn-secondary">Konfiguracja MQTT</button>  --> 
 
-            <!-- Inne konfiguracje, np. MQTT -->
-            <button onclick="goToMQTTConfig()" class="btn btn-secondary">Konfiguracja MQTT</button>
-
-            <!-- Powrót na stronę główną -->
+            <button onclick="switchToStation()" class="btn btn-warning mt-3">Przełącz na tryb Station</button>
             <button onclick="goToHome()" class="btn btn-danger">Powrót na stronę główną</button>
         </div>
     </div>
@@ -43,8 +42,33 @@
             window.location.href = "/mqtt_config.html";
         }
 
+        function goToBMP280Config() {
+            window.location.href = "/bmp280_config.html";
+        }
+
+
         function goToHome() {
             window.location.href = "/";
+        }
+
+        
+        async function switchToStation() {
+            try {
+                const response = await fetch('/switch_to_sta', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(data.message);
+                } else {
+                    alert("Nie udało się przełączyć na tryb STA.");
+                }
+            } catch (error) {
+                console.error("Błąd podczas komunikacji z ESP32:", error);
+                alert("Błąd połączenia z ESP32.");
+            }
         }
     </script>
 </body>

@@ -22,7 +22,7 @@ def index():
 
 def detect_esp32_mode():
     try:
-        response = requests.get("http://192.168.4.1/wifi_config", timeout=5)
+        response = requests.get("http://192.168.4.1/wifi_config", timeout=3)
         if response.status_code == 200:
             print("ESP32 działa w trybie AP")
             return "AP"
@@ -30,7 +30,7 @@ def detect_esp32_mode():
         pass
 
     try:
-        response = requests.get("http://192.168.128.123/wifi_config", timeout=5)
+        response = requests.get("http://192.168.128.123/wifi_config", timeout=3)
         if response.status_code == 200:
             print("ESP32 działa w trybie STA")
             return "STA"
@@ -48,14 +48,27 @@ def data_page():
 @app.route('/switch_to_ap', methods=['GET'])
 def switch_to_ap():
     mqtt_client.publish("/user1/device1/config", "switch_to_ap")
-    time.sleep(5)  # Poczekaj na przełączenie ESP32
+    time.sleep(3)  # Poczekaj na przełączenie ESP32
     return "ESP32 przełączone w tryb AP. Połącz się z siecią ESP32 i wróć do konfiguracji.", 200
+
 
 @app.route('/switch_to_sta', methods=['GET'])
 def switch_to_sta():
-    mqtt_client.publish("/user1/device1/config", "switch_to_sta")
-    time.sleep(5)  # Poczekaj na przełączenie ESP32
-    return redirect('/')
+    try:
+        response = requests.get(f"http://{ESP32_IP}/switch_to_sta", timeout=3)
+        if response.status_code == 200:
+            return jsonify({"message": "ESP32 przełączono do trybu Station."}), 200
+        else:
+            return jsonify({"message": "Nie udało się przełączyć ESP32 do trybu Station."}), 500
+    except requests.exceptions.RequestException as e:
+        print(f"Błąd podczas łączenia z ESP32: {e}")
+        return jsonify({"message": "Nie udało się połączyć z ESP32."}), 500
+
+
+
+@app.route('/bmp280_config.html', methods=['GET'])
+def bmp280_config_page():
+    return render_template('bmp280_config.html')
 
 
 @app.route('/config')
@@ -89,6 +102,30 @@ def sync_mode():
     mode = detect_esp32_mode()
     ip = "192.168.4.1" if mode == "AP" else "192.168.128.123" if mode == "STA" else None
     return jsonify({"mode": mode, "ip": ip})
+
+
+@app.route('/bmp280_config', methods=['GET', 'POST'])
+def bmp280_config():
+    if request.method == 'GET':
+        # Pobierz aktualne ustawienia z ESP32
+        try:
+            response = requests.get(f"http://{ESP32_IP}/bmp280_config", timeout=5)
+            if response.status_code == 200:
+                return jsonify(response.json()), 200
+        except requests.exceptions.RequestException:
+            return jsonify({"error": "ESP32 not reachable"}), 500
+    elif request.method == 'POST':
+        # Wyślij nowe ustawienia do ESP32
+        try:
+            config_data = request.json
+            response = requests.post(f"http://{ESP32_IP}/bmp280_config", json=config_data, timeout=5)
+            if response.status_code == 200:
+                return jsonify({"message": "Configuration updated successfully"}), 200
+            else:
+                return jsonify({"error": "Failed to update configuration"}), 500
+        except requests.exceptions.RequestException:
+            return jsonify({"error": "ESP32 not reachable"}), 500
+
 
 
 

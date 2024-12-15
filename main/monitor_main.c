@@ -24,6 +24,7 @@
 #include "i2c_driver.h"
 
 #include "esp_log.h"
+#include <esp_timer.h>
 
 #define BLINK_GPIO 2
 #define BUTTON_GPIO_PIN 0
@@ -32,6 +33,11 @@ static bool led_state = false;  // stan diody ON/OFF
 bool is_config_mode = false;
 extern httpd_handle_t server;
 
+static esp_timer_handle_t button_timer; // Timer do obsługi timeout dla kliknięć
+static uint32_t click_count = 0;        // Licznik kliknięć
+static const uint32_t double_click_timeout_ms = 500; // 500 ms na podwójne kliknięcie
+
+portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
 /* Task migania diodą */ 
 void led_blink_task(void *pvParameter)
@@ -51,7 +57,49 @@ void led_blink_task(void *pvParameter)
     }
 }
 
+/* Wykrywanie kliknięć przycisku (pojedyncze lub podwójne) */
+void button_timer_callback(void* arg) {
+    uint32_t clicks;
 
+    portENTER_CRITICAL_ISR(&mux); // Synchronizacja 
+    clicks = click_count;
+    click_count = 0; // Zresetuj licznik
+    portEXIT_CRITICAL_ISR(&mux);
+
+    if (clicks == 1) {
+        // Obsługa pojedynczego kliknięcia
+        float temperature, pressure;
+        while (bmp280_is_measuring()) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+        bmp280_read_data(&temperature, &pressure);
+
+        ESP_LOGI("BMP280", "Temperatura: %.2f °C, Ciśnienie: %.2f hPa", temperature, pressure / 100.0);
+
+        // Publikacja MQTT
+        if (!is_config_mode && wifi_connected) {
+            publish_data(client_handle,"user1", "device1");
+
+        }
+    } else if (clicks == 2) {
+        // Obsługa podwójnego kliknięcia
+        notify_clients(server, "{\"mode\": \"AP\"}");
+        if (!is_config_mode) {
+            is_config_mode = true;
+            mqtt_stop();
+            if (server != NULL) stop_webserver(server);
+
+            ESP_LOGI("CONFIG", "Przełączanie do trybu konfiguracji...");
+            gpio_set_level(BLINK_GPIO, 1);
+            esp_wifi_stop();
+            vTaskDelay(pdMS_TO_TICKS(500));
+            wifi_init_ap();
+            server = start_webserver();
+        }
+    }
+}
+
+/* Nasłuchuje na powiadomienia z systemu i przełącza między trybem AP i STA */
 void config_mode_task(void* arg) {
     uint32_t notify_value;
     while (1) {
@@ -108,9 +156,6 @@ void config_mode_task(void* arg) {
     }
 }
 
-
-
-
 /* Konfigurowanie pinu do diody */
 static void configure_led(void)
 {
@@ -120,34 +165,55 @@ static void configure_led(void)
 
 TaskHandle_t config_task_handle = NULL;
 
+/* Obsługa przerwania dla przycisku */
 static void IRAM_ATTR button_isr_handler(void* arg) {
-    static uint32_t last_interrupt_time = 0; // Zmienna do debouncingu
-    uint32_t interrupt_time = xTaskGetTickCountFromISR();
+    static uint32_t last_interrupt_time = 0;
+    uint32_t current_interrupt_time = xTaskGetTickCountFromISR();
 
-    if ((interrupt_time - last_interrupt_time) > 200 / portTICK_PERIOD_MS) {
-        xTaskNotifyFromISR(config_task_handle, 1, eSetValueWithoutOverwrite, NULL);
+    if ((current_interrupt_time - last_interrupt_time) > pdMS_TO_TICKS(200)) { // przynajmniej 200 ms
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+        portENTER_CRITICAL_ISR(&mux); // Synchronizacja
+        click_count++;
+        portEXIT_CRITICAL_ISR(&mux);
+
+        esp_timer_stop(button_timer);
+        esp_timer_start_once(button_timer, double_click_timeout_ms * 1000); 
     }
-    last_interrupt_time = interrupt_time;
+
+    last_interrupt_time = current_interrupt_time;
 }
 
-
-
+/* Konfiguracja przycisku */
 void configure_button() {
     gpio_config_t io_conf = {
-        .intr_type = GPIO_INTR_NEGEDGE, // Przerwanie na opadającym zboczu
-        .mode = GPIO_MODE_INPUT,        // Ustaw jako wejście
-        .pin_bit_mask = (1ULL << BUTTON_GPIO_PIN), // Maska dla pinu
+        .intr_type = GPIO_INTR_NEGEDGE, // Zmiana z wysokiego na niski
+        .mode = GPIO_MODE_INPUT,        // Pin jako wejście
+        .pin_bit_mask = (1ULL << BUTTON_GPIO_PIN), // Przesunięcie bitu odpowiadającego pinowi przycisku
         .pull_down_en = 0,
-        .pull_up_en = 1,                // Włącz podciąganie
+        .pull_up_en = 1,        
     };
     gpio_config(&io_conf);
 
     // Inicjalizacja przerwań GPIO
-    gpio_install_isr_service(0); // Możesz dostosować flagi
+    gpio_install_isr_service(ESP_INTR_FLAG_LEVEL3);
     gpio_isr_handler_add(BUTTON_GPIO_PIN, button_isr_handler, NULL);
+
+    // Inicjalizacja timera
+    const esp_timer_create_args_t timer_args = {
+        .callback = &button_timer_callback,
+        .name = "button_timer"
+    };
+    esp_timer_create(&timer_args, &button_timer);
 }
 
-
+bmp280_config_t bmp280_default_config = {
+    .oversampling_temp = BMP280_OSRS_X1,
+    .oversampling_press = BMP280_OSRS_X1,
+    .standby_time = 0x05,
+    .filter = 0x04,
+    .mode = BMP280_SLEEP_MODE
+};
 
 void app_main(void)
 {
@@ -173,11 +239,14 @@ void app_main(void)
 
     i2c_master_init();
     vTaskDelay(pdMS_TO_TICKS(100)); 
-    bmp280_init();
 
+    
+    bmp280_init();
+    load_bmp280_config_from_nvs(&bmp280_default_config);
+    bmp280_apply_config(&bmp280_default_config);
 
     // Uruchomienie tasków
-    xTaskCreate(config_mode_task, "config_mode_task", 4096, NULL, 10, &config_task_handle);
+    xTaskCreate(config_mode_task, "config_mode_task", 10240, NULL, 5, &config_task_handle);
     xTaskCreate(&led_blink_task, "led_blink_task", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 
     initialize_mqtt_mutex();
@@ -185,7 +254,7 @@ void app_main(void)
     // Inicjalizacja Wi-Fi i innych modułów
     wifi_init_sta();
     connect_to_wifi();
-    vTaskDelay(pdMS_TO_TICKS(100)); 
+    vTaskDelay(pdMS_TO_TICKS(500)); 
     server = start_webserver();
     notify_clients(server, "{\"mode\": \"STA\"}");
 
@@ -195,10 +264,6 @@ void app_main(void)
    /* i2c_master_init();
     vTaskDelay(pdMS_TO_TICKS(100)); 
     bmp280_init();
-
-
-    bmp280_read_calibration_data();
-    ESP_LOGI("BMP280", "Calibration data loaded.");
 
    while (1) {
         bmp280_read_data();

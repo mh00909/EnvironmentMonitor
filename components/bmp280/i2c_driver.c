@@ -35,6 +35,7 @@ void i2c_scan() {
 }
 
 esp_err_t i2c_write_register(uint8_t device_addr, uint8_t reg_addr, uint8_t data) {
+    ESP_LOGI("I2C", "Próba zapisu: addr=0x%02X, reg=0x%02X, val=0x%02X", device_addr, reg_addr, data);
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, (device_addr << 1) | I2C_MASTER_WRITE, true);

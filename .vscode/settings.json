@@ -31,7 +31,8 @@
         "esp_log.h": "c",
         "esp_http_server.h": "c",
         "i2c_driver.h": "c",
-        "http_server.h": "c"
+        "http_server.h": "c",
+        "task.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc",
     "idf.gitPath": "git"

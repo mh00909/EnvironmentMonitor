@@ -19,11 +19,11 @@
 
 /*
 - Zarządzanie trybem AP
-- Logika związana z Wi0Fi
+- Logika związana z Wi-Fi
 - Powiązanie Wi-Fi z serwerem HTTP
 */
 
-static const char *TAG = "wifi_ap"; // do logowania wiadomości
+static const char *TAG = "wifi_ap"; 
 
 extern httpd_handle_t server;
 

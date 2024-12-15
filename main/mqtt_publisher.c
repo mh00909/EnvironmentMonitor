@@ -32,7 +32,7 @@ const char *photoresistor_id = "photoresistor";
 const char *bmp280_id = "bmp280";
 
 
-static esp_mqtt_client_handle_t client_handle = NULL;
+esp_mqtt_client_handle_t client_handle = NULL;
 
 TaskHandle_t sensor_data_task_handle = NULL;
 SemaphoreHandle_t mqtt_mutex = NULL;
@@ -95,6 +95,7 @@ float generate_value(float min, float max) {
 // Funkcja publikująca dane
 // tematy: /<user_id>/<device_id>/<sensor_type>/<metric>
 void publish_data(esp_mqtt_client_handle_t client, const char *user, const char *device) {
+    bmp280_mode_t current_mode = bmp280_get_mode(); // Pobierz aktualny tryb pracy BMP280
 
     char light_topic[100];
     char temperature_topic[100];
@@ -122,29 +123,38 @@ void publish_data(esp_mqtt_client_handle_t client, const char *user, const char 
     
     if (client_handle != NULL) {
         safe_publish(client, light_topic, light_data);
-        ESP_LOGI(TAG, "Published light data on topic %s", light_topic);
-
         safe_publish(client, temperature_topic, temperature_data);
-        ESP_LOGI(TAG, "Published temperature data on topic %s", temperature_topic);
-
         safe_publish(client, pressure_topic, pressure_data);
-        ESP_LOGI(TAG, "Published pressure data on topic %s", pressure_topic);
 
     }
 }
 
-// Task do publikacji danych co określony czas
 void sensor_data_task(void *pvParameters) {
     esp_mqtt_client_handle_t client = (esp_mqtt_client_handle_t) pvParameters;
+
     while (1) {
         if (client_handle != NULL) {
-            publish_data(client, user_id, device_id);
-        } else {
-            ESP_LOGW(TAG, "Klient MQTT niezaincjalizowany, pominięcie publikacji.");
-        }
+            bmp280_mode_t current_mode = bmp280_get_mode();
+
+            if (current_mode == BMP280_NORMAL_MODE) {
+                ESP_LOGI(TAG, "BMP280 w trybie NORMAL_MODE. Publikacja danych.");
+                publish_data(client, user_id, device_id);
+            } else if (current_mode == BMP280_FORCED_MODE) {
+                ESP_LOGI(TAG, "BMP280 w trybie FORCED_MODE. Wykonanie pojedynczego pomiaru i publikacja danych.");
+                bmp280_set_mode(BMP280_FORCED_MODE); // Wymuszenie jednorazowego pomiaru
+                while (bmp280_is_measuring()) {
+                    vTaskDelay(pdMS_TO_TICKS(10)); // Poczekaj na zakończenie pomiaru
+                }
+                publish_data(client, user_id, device_id);
+            } else {
+              //  ESP_LOGI(TAG, "BMP280 w trybie SLEEP. Pomijanie publikacji danych.");
+            }
+        } 
+
         vTaskDelay(10000 / portTICK_PERIOD_MS); // 10 s
     }
 }
+
 
 // Funkcja obsługująca zdarzenia MQTT
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
@@ -186,7 +196,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 // Funkcja inicjalizująca klienta MQTT i task publikujący dane
 void mqtt_initialize(void) {
     if (client_handle != NULL) {
-        ESP_LOGW(TAG, "Klient MQTT jest już zainicjalizowny. Zatrzymanie obecnego klienta.");
+        //ESP_LOGW(TAG, "Klient MQTT jest już zainicjalizowny. Zatrzymanie obecnego klienta.");
         mqtt_stop();
     }
 
@@ -216,4 +226,9 @@ void mqtt_initialize(void) {
         ESP_LOGE(TAG, "Błąd przy uruchamianiu klienta MQTT: %s", esp_err_to_name(err));
         client_handle = NULL;
     }
+
+
+
+
+
 }
