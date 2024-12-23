@@ -12,6 +12,7 @@
 #include "esp_netif.h"
 #include "esp_http_client.h"
 #include "wifi_station.h"
+#include "light_sensor.h"
 #include "esp_mac.h"
 #include "nvs_flash.h"
 #include "driver/i2c.h"
@@ -22,12 +23,19 @@
 #include "bmp280.h"
 #include "http_server.h"
 #include "i2c_driver.h"
-
 #include "esp_log.h"
 #include <esp_timer.h>
+#include "ble_sensor.h"
+#include "power_manager.h"
+#include "esp_bt.h"
 
 #define BLINK_GPIO 2
 #define BUTTON_GPIO_PIN 0
+
+
+
+#define BUTTON_GPIO GPIO_NUM_18
+
 
 static bool led_state = false;  // stan diody ON/OFF
 bool is_config_mode = false;
@@ -38,6 +46,36 @@ static uint32_t click_count = 0;        // Licznik kliknięć
 static const uint32_t double_click_timeout_ms = 500; // 500 ms na podwójne kliknięcie
 
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+
+
+
+void led_on(int led_gpio) {
+    gpio_set_level(led_gpio, 1);
+}
+
+void led_off(int led_gpio) {
+    gpio_set_level(led_gpio, 0);
+}
+
+
+void gpio_init(void) {
+    // Konfiguracja GPIO dla LED
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << LED1_GPIO) | (1ULL << LED2_GPIO), // Piny LED
+        .mode = GPIO_MODE_OUTPUT, // Wyjście
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE // Brak przerwań
+    };
+    gpio_config(&io_conf);
+
+    // Konfiguracja GPIO dla przycisku
+    io_conf.pin_bit_mask = (1ULL << BUTTON_GPIO); // Pin przycisku
+    io_conf.mode = GPIO_MODE_INPUT; // Wejście
+    io_conf.pull_up_en = GPIO_PULLUP_ENABLE; // Włącz pull-up (przycisk podłączony do GND)
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    gpio_config(&io_conf);
+}
 
 /* Task migania diodą */ 
 void led_blink_task(void *pvParameter)
@@ -68,22 +106,30 @@ void button_timer_callback(void* arg) {
 
     if (clicks == 1) {
         // Obsługa pojedynczego kliknięcia
-        float temperature, pressure;
-        while (bmp280_is_measuring()) {
-            vTaskDelay(pdMS_TO_TICKS(10));
+        if(!is_config_mode) {
+
+            bmp280_set_mode(BMP280_FORCED_MODE);
+            while (bmp280_is_measuring()) {
+                vTaskDelay(pdMS_TO_TICKS(10));
+            }
+            bmp280_read_data(&current_temperature_bmp280, &current_pressure_bmp280);
+            current_pressure_bmp280 = current_pressure_bmp280/100.0;
+            ESP_LOGI("BMP280", "Temperatura: %.2f °C, Ciśnienie: %.2f hPa", current_temperature_ble, current_pressure_bmp280);
+            light_sensor_read(&current_light);
+            int precent = light_sensor_to_percentage(current_light);
+            ESP_LOGI("LIGHT", "Light: %d, %d%%", current_light, precent);
+
+            // Publikacja MQTT
+            if (!is_config_mode && wifi_connected) {
+                publish_data(client_handle,"user1", "device1");
+
+            }
+        } else { // wyjście z trybu konfiguracji
+            xTaskNotify(config_task_handle, 2, eSetValueWithoutOverwrite);
         }
-        bmp280_read_data(&temperature, &pressure);
 
-        ESP_LOGI("BMP280", "Temperatura: %.2f °C, Ciśnienie: %.2f hPa", temperature, pressure / 100.0);
-
-        // Publikacja MQTT
-        if (!is_config_mode && wifi_connected) {
-            publish_data(client_handle,"user1", "device1");
-
-        }
     } else if (clicks == 2) {
         // Obsługa podwójnego kliknięcia
-        notify_clients(server, "{\"mode\": \"AP\"}");
         if (!is_config_mode) {
             is_config_mode = true;
             mqtt_stop();
@@ -108,7 +154,6 @@ void config_mode_task(void* arg) {
             //ESP_LOGI("CONFIG", "Otrzymano powiadomienie: %u", notify_value);
 
             if (notify_value == 1) { // Przejście do trybu konfiguracji
-                notify_clients(server, "{\"mode\": \"AP\"}");
                 if (!is_config_mode) {
                     is_config_mode = true;
                     mqtt_stop();
@@ -124,7 +169,7 @@ void config_mode_task(void* arg) {
     
                 }
             } else if (notify_value == 2) { // Przejście do trybu station
-                notify_clients(server, "{\"mode\": \"STA\"}");
+
                 if (is_config_mode) {
                     is_config_mode = false;
                     mqtt_stop();
@@ -208,17 +253,103 @@ void configure_button() {
 }
 
 bmp280_config_t bmp280_default_config = {
-    .oversampling_temp = BMP280_OSRS_X1,
+    .oversampling_temp = BMP280_OSRS_X1, 
     .oversampling_press = BMP280_OSRS_X1,
     .standby_time = 0x05,
     .filter = 0x04,
     .mode = BMP280_SLEEP_MODE
 };
 
+void save_default_mqtt_config() {
+    const char* default_broker = "mqtt://192.168.57.30";
+    int default_port = 1883;
+    const char* default_user = "username";
+    const char* default_password = "password";
+
+    save_mqtt_config_to_nvs(default_broker, default_port, default_user, default_password);
+}
+
+
+
+esp_err_t ble_initialize() {
+    esp_err_t ret = esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
+    if (ret) {
+        ESP_LOGE("BLE", "Bluetooth controller release classic BT memory failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+    ret = esp_bt_controller_init(&bt_cfg);
+    if (ret) {
+        ESP_LOGE("BLE", "Bluetooth controller initialize failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
+    if (ret) {
+        ESP_LOGE("BLE", "Bluetooth controller enable failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = esp_bluedroid_init();
+    if (ret) {
+        ESP_LOGE("BLE", "Bluedroid initialize failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = esp_bluedroid_enable();
+    if (ret) {
+        ESP_LOGE("BLE", "Bluedroid enable failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    // Rejestracja GAP i GATTC callbacków
+    ret = esp_ble_gap_register_callback(esp_gap_cb);
+    if (ret) {
+        ESP_LOGE("BLE", "%s gap register failed, error code = %x", __func__, ret);
+     
+    }
+    ret = esp_ble_gattc_register_callback(esp_gattc_cb);
+    if (ret) {
+        ESP_LOGE("BLE", "%s gattc register failed, error code = %x", __func__, ret);
+  
+    }
+    ret = esp_ble_gattc_app_register(0);
+    if (ret) {
+        ESP_LOGE("BLE", "%s gattc app register failed, error code = %x", __func__, ret);
+    }
+
+    ESP_LOGI("BLE", "BLE initialized successfully.");
+    return ESP_OK;
+}
+
+
+void monitor_conditions_task(void *pvParameters) {
+    while (1) {
+        // Sprawdź temperaturę
+        if (current_temperature_bmp280 < min_temperature_threshold || current_temperature_bmp280 > max_temperature_threshold) {
+            led_on(LED1_GPIO);
+        } else {
+            led_off(LED1_GPIO);
+        }
+
+        // Sprawdź światło
+        if (current_light < min_light_threshold || current_light > max_light_threshold) {
+            led_on(LED2_GPIO);
+        } else {
+            led_off(LED2_GPIO);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(2000)); 
+    }
+}
+
 void app_main(void)
 {
 
-    // Inicjalizacja NVS do przechowywania konfiguracji wifi
+  //  esp_log_level_set("wifi", ESP_LOG_NONE);
+
+    // Inicjalizacja NVS 
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -245,29 +376,52 @@ void app_main(void)
     load_bmp280_config_from_nvs(&bmp280_default_config);
     bmp280_apply_config(&bmp280_default_config);
 
+    light_sensor_init();
+    
+
     // Uruchomienie tasków
-    xTaskCreate(config_mode_task, "config_mode_task", 10240, NULL, 5, &config_task_handle);
+    xTaskCreate(config_mode_task, "config_mode_task", 4096, NULL, 5, &config_task_handle);
     xTaskCreate(&led_blink_task, "led_blink_task", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 
-    initialize_mqtt_mutex();
+    
 
     // Inicjalizacja Wi-Fi i innych modułów
     wifi_init_sta();
     connect_to_wifi();
+
+    // Inicjalizacja BLE
+    ret = ble_initialize();
+    if (ret != ESP_OK) {
+        ESP_LOGE("Main", "Failed to initialize BLE");
+        return;
+    }
+    
+
+    if (esp_ble_gap_stop_scanning() == ESP_OK) {
+        ESP_LOGI("BLE", "Scanning stopped successfully.");
+    } else {
+        ESP_LOGW("BLE", "Failed to stop scanning before starting a new scan.");
+    }
+    vTaskDelay(pdMS_TO_TICKS(100)); 
+    esp_err_t scan_ret = esp_ble_gap_start_scanning(60);
+    if (scan_ret != ESP_OK) {
+        ESP_LOGE("BLE", "Failed to start scanning: %s", esp_err_to_name(scan_ret));
+    } else {
+        ESP_LOGI("BLE", "BLE scanning started for 60 seconds.");
+    }
+
+    
+
     vTaskDelay(pdMS_TO_TICKS(500)); 
     server = start_webserver();
-    notify_clients(server, "{\"mode\": \"STA\"}");
 
-    ///
+    initialize_mqtt_mutex();
+    save_default_mqtt_config();
 
+    gpio_init();
 
-   /* i2c_master_init();
-    vTaskDelay(pdMS_TO_TICKS(100)); 
-    bmp280_init();
-
-   while (1) {
-        bmp280_read_data();
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }*/
+    xTaskCreate(&monitor_conditions_task, "monitor_conditions_task", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
     
+    //xTaskCreate(&power_manager_task, "power_manager_task", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+    set_power_mode(MODE_POWER_SAVE);
 }

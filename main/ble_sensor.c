@@ -11,6 +11,7 @@
 #include "esp_gatt_common_api.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "ble_sensor.h"
 
 #define GATTC_TAG "GATTC"
 
@@ -22,22 +23,23 @@
 #define BATTERY_SERVICE_UUID 0x180F
 #define BATTERY_LEVEL_CHAR_UUID 0x2A19
 
-//static const char device_name[] = "ATC_4BEDDC"; // termometr
-static const char device_name[] = "ESP32_"; // esp32
 
-static bool connect = false; // czy zostało nawiązane połączenie
-static bool connection_in_progress = false; // czy jest wykonywana teraz próba nawiązania połączenia
-static esp_gattc_char_elem_t *char_elem_result = NULL; // przechowuje wyniki wyszukiwania charakterystyk GATT
-static esp_gattc_descr_elem_t *descr_elem_result = NULL; // przechowuje wyniki wyszukiwania deskryptorów GATT
-
-static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
-static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
-static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 
 uint16_t humidity_char_handle = 0;
 uint16_t battery_char_handle = 0;
 uint16_t battery_service_start_handle = 0;
 uint16_t battery_service_end_handle = 0;
+
+
+float current_temperature_ble = 0.0; // Przechowuje odczytaną temperaturę
+float current_humidity_ble = 0.0;    // Przechowuje odczytaną wilgotność
+
+
+static bool is_connected = false; // czy zostało nawiązane połączenie
+static bool connection_in_progress = false; // czy jest wykonywana teraz próba nawiązania połączenia
+static esp_gattc_char_elem_t *char_elem_result = NULL; // przechowuje wyniki wyszukiwania charakterystyk GATT
+static esp_gattc_descr_elem_t *descr_elem_result = NULL; // przechowuje wyniki wyszukiwania deskryptorów GATT
+static const char device_name[] = "ATC_4BEDDC"; // termometr
 
 // Deskryptor powiadomień (pozwala włączyć/wyłączyć)
 static esp_bt_uuid_t notify_descr_uuid = {
@@ -73,7 +75,7 @@ static struct gattc_profile_inst gattc_profile = {
 
 // Obsługa zdarzeń GATT w profilu klienta BLE
 // Parametry: typ zdarzenia, interfejs GATT przypisany do klienta, wskaźnik na strukturę zawierającą szczegółowe dane związane ze zdarzeniem
-static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
+void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
 {
     // Przypisuje wskaźnik do danych wejściowych, aby ułatwić dostęp do parametrów zdarzenia.
     esp_ble_gattc_cb_param_t *p_data = (esp_ble_gattc_cb_param_t *)param;
@@ -385,16 +387,16 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
 
         // Odbieranie danych z powiadomień od serwera 
         case ESP_GATTC_NOTIFY_EVT:
-       // ESP_LOGI(GATTC_TAG, "Received notification for handle: %d", p_data->notify.handle);
+        ESP_LOGI(GATTC_TAG, "Received notification for handle: %d", p_data->notify.handle);
             if (p_data->notify.handle == gattc_profile.char_handle) { // Sprawdzenie, do której charakterystyki należy powiadomienie
                 // Przetwarzanie danych
                 int16_t raw_temp = (p_data->notify.value[1] << 8) | p_data->notify.value[0];
-                float temperature = raw_temp / 10.0;
-                ESP_LOGI(GATTC_TAG, "Received notification: Temperature: %.2f°C", temperature);
+                current_temperature_ble = raw_temp / 10.0;
+                ESP_LOGI(GATTC_TAG, "Received notification: Temperature: %.2f°C", current_temperature_ble);
             } else if (p_data->notify.handle == humidity_char_handle) {
                 int16_t raw_hum = (p_data->notify.value[1] << 8) | p_data->notify.value[0];
-                float humidity = raw_hum / 100.0;
-                ESP_LOGI(GATTC_TAG, "Received notification: Humidity: %.2f%%", humidity);
+                current_humidity_ble = raw_hum / 100.0;
+                ESP_LOGI(GATTC_TAG, "Received notification: Humidity: %.2f%%", current_humidity_ble);
             } else if (p_data->notify.handle == battery_char_handle) {
                 uint8_t battery_level = p_data->notify.value[0];
                 ESP_LOGI(GATTC_TAG, "Received notification: Battery Level: %d%%", battery_level);
@@ -412,7 +414,7 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
   
         // Rozłączenie BLE
         case ESP_GATTC_DISCONNECT_EVT:
-            connect = false;
+            is_connected = false;
             ESP_LOGI(GATTC_TAG, "ESP_GATTC_DISCONNECT_EVT, reason = %d", p_data->disconnect.reason);
             connection_in_progress = false;
             ESP_LOGI(GATTC_TAG, "Disconnected, restarting scan...");
@@ -426,7 +428,7 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
 }
 
 // Obsługuje zdarzenia GAP
-static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
+void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
     uint8_t *adv_name = NULL;
     uint8_t adv_name_len = 0;
@@ -470,7 +472,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             ESP_LOGI(GATTC_TAG, "Connecting to device with address:");
             esp_log_buffer_hex(GATTC_TAG, scan_result->scan_rst.bda, 6);
 
-            if (!connection_in_progress && !connect) {
+            if (!connection_in_progress && !is_connected) {
                 connection_in_progress = true;  // połączenie jest w trakcie
                 esp_ble_gap_stop_scanning();   // Zatrzymaj skanowanie
                 esp_err_t open_ret = esp_ble_gattc_open(gattc_profile.gattc_if, 
@@ -509,7 +511,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
 
 // Główny callback obsługujący zdarzenia GATT związane z klientem BLE
 // Parametry: typ zdarzenia GATT, interfejs GATT klienta (id przypisany po rejestracji), wskaźnik do struktury zawierającej szczegółowe informacje o zdarzeniu
-static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
+void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
 {
     // Obsługa zdarzenia rejestracji
     if (event == ESP_GATTC_REG_EVT) {
@@ -530,59 +532,4 @@ static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp
         }
         
     } while (0);
-}
-
-
-void app_main(void)
-{
-    // Inicjalizacja pamięci NVS - do przechowywania konfiguracji
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
-    // Inicjalizacja kontrolera Bluetooth w trybie BLE
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    ret = esp_bt_controller_init(&bt_cfg);
-    if (ret) {
-        ESP_LOGE(GATTC_TAG, "%s initialize controller failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-    // Włącza kontroler w trybie BLE
-    ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
-    if (ret) {
-        ESP_LOGE(GATTC_TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-    // Inicjalizuje stos Bluetooth
-    ret = esp_bluedroid_init();
-    if (ret) {
-        ESP_LOGE(GATTC_TAG, "%s init bluetooth failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-    // Włącza stos Bluetooth
-    ret = esp_bluedroid_enable();
-    if (ret) {
-        ESP_LOGE(GATTC_TAG, "%s enable bluetooth failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-    // Rejestracja GAP i GATTC callbacków
-    ret = esp_ble_gap_register_callback(esp_gap_cb);
-    if (ret) {
-        ESP_LOGE(GATTC_TAG, "%s gap register failed, error code = %x", __func__, ret);
-        return;
-    }
-    ret = esp_ble_gattc_register_callback(esp_gattc_cb);
-    if (ret) {
-        ESP_LOGE(GATTC_TAG, "%s gattc register failed, error code = %x", __func__, ret);
-        return;
-    }
-    ret = esp_ble_gattc_app_register(0);
-    if (ret) {
-        ESP_LOGE(GATTC_TAG, "%s gattc app register failed, error code = %x", __func__, ret);
-    }
-
-    
 }

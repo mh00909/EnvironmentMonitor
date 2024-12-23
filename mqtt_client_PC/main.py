@@ -3,17 +3,46 @@ from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
 import requests
 import time
+import os
+
 import json
 
 app = Flask(__name__)
 socketio = SocketIO(app)
 
 # Konfiguracja MQTT brokera
-BROKER = "192.168.128.30"
-TOPICS = ["/user1/device1/bmp280/temperature", "/user1/device1/bmp280/pressure", "/user1/device1/photoresistor/light"]
+BROKER = "192.168.57.30"
+TOPICS = [
+    "/user1/device1/bmp280/temperature", 
+    "/user1/device1/bmp280/pressure", 
+    "/user1/device1/photoresistor/light", 
+    "/user1/device1/ble/temperature", 
+    "/user1/device1/ble/humidity"
+]
 
 # Domyślny adres ESP32 w trybie STA
-ESP32_IP = "192.168.128.123"  
+ESP32_IP = "192.168.57.123"  
+
+MQTT_CONFIG_FILE = "mqtt_config.json"
+
+def load_mqtt_config():
+    """Ładuje konfigurację MQTT z pliku."""
+    if os.path.exists(MQTT_CONFIG_FILE):
+        with open(MQTT_CONFIG_FILE, 'r') as file:
+            return json.load(file)
+    else:
+        # Domyślna konfiguracja
+        return {
+            "broker": "192.168.57.30",
+            "port": 1883,
+            "username": "username",
+            "password": "password"
+        }
+
+def save_mqtt_config(config):
+    """Zapisuje konfigurację MQTT do pliku."""
+    with open(MQTT_CONFIG_FILE, 'w') as file:
+        json.dump(config, file)
 
 @app.route('/')
 def index():
@@ -30,7 +59,7 @@ def detect_esp32_mode():
         pass
 
     try:
-        response = requests.get("http://192.168.128.123/wifi_config", timeout=3)
+        response = requests.get("http://192.168.57.123/wifi_config", timeout=3)
         if response.status_code == 200:
             print("ESP32 działa w trybie STA")
             return "STA"
@@ -70,6 +99,9 @@ def switch_to_sta():
 def bmp280_config_page():
     return render_template('bmp280_config.html')
 
+@app.route('/mqtt_config.html', methods=['GET'])
+def mqtt_config_page():
+    return render_template('mqtt_config.html')
 
 @app.route('/config')
 def config():
@@ -82,6 +114,21 @@ def config():
     except requests.exceptions.RequestException:
         ESP32_IP = "192.168.128.123"  # Wróć do STA w razie problemów
         return "ESP32 w trybie STA", 500
+
+@app.route('/mqtt_config', methods=['GET', 'POST'])
+def mqtt_config():
+    if request.method == 'GET':
+        # Pobierz aktualną konfigurację
+        config = load_mqtt_config()
+        return jsonify(config), 200
+    elif request.method == 'POST':
+        # Zaktualizuj konfigurację
+        new_config = request.json
+        if not new_config:
+            return jsonify({"error": "Invalid configuration data"}), 400
+
+        save_mqtt_config(new_config)
+        return jsonify({"message": "Configuration updated successfully"}), 200
 
 
 @app.route('/wifi_config')
@@ -127,6 +174,30 @@ def bmp280_config():
             return jsonify({"error": "ESP32 not reachable"}), 500
 
 
+@app.route('/set_temp_range', methods=['POST'])
+def set_temp_range():
+    data = request.json
+    min_temp = data.get('min_temperature', None)
+    max_temp = data.get('max_temperature', None)
+
+    if min_temp is not None and max_temp is not None:
+        mqtt_client.publish("/user1/device1/control/temp_range", f"{min_temp},{max_temp}")
+        return jsonify({"message": f"Temperature range set to {min_temp}°C - {max_temp}°C"}), 200
+    else:
+        return jsonify({"error": "Invalid temperature range"}), 400
+
+
+@app.route('/set_light_range', methods=['POST'])
+def set_light_range():
+    data = request.json
+    min_light = data.get('min_light', None)
+    max_light = data.get('max_light', None)
+
+    if min_light is not None and max_light is not None:
+        mqtt_client.publish("/user1/device1/control/light_range", f"{min_light},{max_light}")
+        return jsonify({"message": f"Light range set to {min_light} - {max_light}"}), 200
+    else:
+        return jsonify({"error": "Invalid light range"}), 400
 
 
 # Obsługa zdarzeń MQTT
@@ -149,15 +220,20 @@ def on_message(client, userdata, msg):
 
 
 # Konfiguracja klienta MQTT
+# Wczytaj konfigurację MQTT
+mqtt_settings = load_mqtt_config()
+
+# Konfiguracja klienta MQTT
 mqtt_client = mqtt.Client()
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
-mqtt_client.username_pw_set("username", "password")
+mqtt_client.username_pw_set(mqtt_settings["username"], mqtt_settings["password"])
 
 try:
-    mqtt_client.connect(BROKER, 1883, 60)
+    mqtt_client.connect(mqtt_settings["broker"], mqtt_settings["port"], 60)
 except Exception as e:
     print(f"Failed to connect to MQTT broker: {e}")
+
 
 
 @socketio.on('connect')

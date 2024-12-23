@@ -8,6 +8,9 @@
 
 static const char *TAG = "BMP280";
 
+float current_pressure_bmp280 = 0;
+float current_temperature_bmp280 = 0.0;
+
 // Struktura przechowująca dane kalibracyjne
 typedef struct {
     int32_t t_fine; // Precyzyjna wartość temperatury wykorzystywana podczas kompensacji ciśnienia
@@ -126,7 +129,7 @@ esp_err_t bmp280_set_oversampling(uint8_t osrs_t, uint8_t osrs_p) {
     return ESP_OK;
 }
 
-esp_err_t bmp280_configure(uint8_t t_sb, uint8_t filter) {
+esp_err_t bmp280_configure(uint8_t t_sb, uint8_t filter) { // konfiguracja rejestru config (standby time i filtr IIR)
     if (t_sb > 0x07 || filter > 0x07) {
         ESP_LOGE(TAG, "Nieprawidłowe wartości argumentów: t_sb=0x%02X, filter=0x%02X", t_sb, filter);
         return ESP_ERR_INVALID_ARG;
@@ -312,7 +315,7 @@ uint32_t bmp280_compensate_pressure(int32_t adc_P, int32_t fine_temp) {
     var1 = ((var1 * var1 * (int64_t)bmp280_calib.dig_P3) >> 8) + ((var1 * (int64_t)bmp280_calib.dig_P2) << 12);
     var1 = (((int64_t)1 << 47) + var1) * (int64_t)bmp280_calib.dig_P1 >> 33;
 
-    if (var1 == 0) return 0; // Uniknięcie dzielenia przez zero
+    if (var1 == 0) return 0;
 
     int64_t p = 1048576 - adc_P;
     p = (((p << 31) - var2) * 3125) / var1;
@@ -341,7 +344,7 @@ bool bmp280_is_measuring(void) {
     esp_err_t err = bmp280_read_register(0xF3, &status, 1);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Nie udało się odczytać rejestru statusu.");
-        return false;  // Przy błędzie zakładamy, że pomiar nie jest wykonywany
+        return false; 
     }
 
     // Bit 3 (measuring) wskazuje stan pomiaru

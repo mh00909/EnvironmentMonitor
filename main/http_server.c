@@ -11,65 +11,14 @@
 #include "nvs.h"
 
 
-/*
-- Obsługa żądań HTTP i WebSocket
-- Endpointy do konfiguracji i komunikacji
-- Zarządzanie stanem serwera
-*/
-
 static const char *TAG = "HTTP_SERVER";
 
 httpd_handle_t server = NULL;
 
-#define MAX_CLIENTS 5
-static int client_sockets[MAX_CLIENTS] = {-1}; // Tablica uchwytów klientów
-
-void register_client(int sockfd) {
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (client_sockets[i] == -1) { // Znajdź wolne miejsce w tablicy
-            client_sockets[i] = sockfd;
-            ESP_LOGI(TAG, "Zarejstrowano klienta: %d", sockfd);
-            return;
-        }
-    }
-}
-
-void unregister_client(int sockfd) {
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (client_sockets[i] == sockfd) {
-            client_sockets[i] = -1; // Usuń klienta z listy
-            ESP_LOGI(TAG, "Usunięto klienta: %d", sockfd);
-            return;
-        }
-    }
-    ESP_LOGW(TAG, "Nie znaleziono %d w liście", sockfd);
-}
-
-void notify_clients(httpd_handle_t server, const char *message) {
-    esp_err_t err;
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t)); // Wyzeruj strukturę
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;            // Typ wiadomości WebSocket
-    ws_pkt.payload = (uint8_t *)message;         // Ustaw treść wiadomości
-    ws_pkt.len = strlen(message);                // Długość wiadomości
-
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (client_sockets[i] != -1) { // Sprawdź, czy klient jest zarejestrowany
-            err = httpd_ws_send_frame_async(server, client_sockets[i], &ws_pkt); // Dodano uchwyt serwera
-            if (err == ESP_OK) {
-                ESP_LOGI(TAG, "Wysłano wiadomość doo klienta %d: %s", client_sockets[i], message);
-            } else {
-                unregister_client(client_sockets[i]); // Usuń klienta w przypadku błędu
-            }
-        }
-    }
-}
-
-
 
 httpd_handle_t start_webserver(void) {
     if (server != NULL) {
-        return server; // Jeśli serwer już działa, po prostu zwróć uchwyt
+        return server; 
     }
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -81,8 +30,8 @@ httpd_handle_t start_webserver(void) {
     config.max_open_sockets = 5;
 
     config.lru_purge_enable = true; // Usuwanie najstarszych połączeń
-    config.recv_wait_timeout = 5;   // 5 sekund na odbiór danych
-    config.send_wait_timeout = 5;   // 5 sekund na wysłanie danych
+    config.recv_wait_timeout = 5;  
+    config.send_wait_timeout = 5;
 
     
     if (httpd_start(&server, &config) == ESP_OK) {
@@ -91,47 +40,20 @@ httpd_handle_t start_webserver(void) {
         return server;
     }
 
-
-    ESP_LOGE("HTTP", "Błąd przy uruchamianiu serwera.");
     return NULL;
 }
 
 void stop_webserver(httpd_handle_t server) {
     if (server != NULL) {
         esp_err_t err = httpd_stop(server);
-        if (err == ESP_OK) {
-            ESP_LOGI(TAG, "Serwer HTTP zatrzymany poprawnie.");
-        } else {
-            ESP_LOGE(TAG, "Błąd przy zatrzymywaniu serwera HTTP: %s", esp_err_to_name(err));
-        }
+    
         server = NULL;
     } 
 }
 
-// Funkcja do testowania obsługi połączeń WebSocket
-esp_err_t websocket_handler(httpd_req_t *req) {
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-
-    // Odbierz ramkę WebSocket
-    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Błąd przy otrzymywaniu ramki WebSocket: %s", esp_err_to_name(ret));
-        return ret;
-    }
-    // Sprawdź typ ramki
-    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
-        ws_pkt.payload = (uint8_t *)"Pong!";
-        ws_pkt.len = strlen("Pong!");
-        ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-        return httpd_ws_send_frame(req, &ws_pkt);
-    } else {
-        return ESP_FAIL;
-    }
-}
-
 /* Przejście do STA z AP */
 static esp_err_t handle_confirm_wifi(httpd_req_t *req) {
+    vTaskDelay(pdMS_TO_TICKS(2000));
     ESP_LOGI("HTTP", "Potwierdzenie połączenia w trybie AP");
     xTaskNotify(config_task_handle, 2, eSetValueWithoutOverwrite); // Przełącz na tryb STA
     httpd_resp_send(req, "ESP32 przełącza się na tryb STA", HTTPD_RESP_USE_STRLEN);
@@ -172,14 +94,6 @@ static esp_err_t handle_config(httpd_req_t *req) {
 
 void register_endpoints(httpd_handle_t server) {
 
-    httpd_uri_t ws_uri = {
-        .uri       = "/ws",         
-        .method    = HTTP_GET,       
-        .handler   = websocket_handler, 
-        .is_websocket = true       
-    };
-    httpd_register_uri_handler(server, &ws_uri);
-
 
     httpd_uri_t wifi_post = {
         .uri = "/set_wifi",
@@ -207,16 +121,6 @@ void register_endpoints(httpd_handle_t server) {
     };
     httpd_register_uri_handler(server, &wifi_config_endpoint);
 
-    // Register OPTIONS handler for /bmp280_config
-    httpd_uri_t bmp280_config_options = {
-        .uri       = "/bmp280_config",
-        .method    = HTTP_OPTIONS,
-        .handler   = handle_options,
-        .user_ctx  = NULL
-    };
-    httpd_register_uri_handler(server, &bmp280_config_options);
-
-
     httpd_uri_t bmp280_config_get = {
         .uri       = "/bmp280_config",
         .method    = HTTP_GET,
@@ -241,6 +145,15 @@ void register_endpoints(httpd_handle_t server) {
         .user_ctx  = NULL
     };
     httpd_register_uri_handler(server, &switch_to_sta_endpoint);
+
+
+    httpd_uri_t mqtt_post = {
+        .uri = "/set_mqtt",
+        .method = HTTP_POST,
+        .handler = handle_set_mqtt_post,
+        .user_ctx = NULL,
+    };
+    httpd_register_uri_handler(server, &mqtt_post);
 
 }
 
@@ -312,18 +225,8 @@ esp_err_t handle_switch_to_config(httpd_req_t *req) {
 
 
 
-static esp_err_t handle_options(httpd_req_t *req) {
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    return httpd_resp_send(req, NULL, 0); 
-}
+esp_err_t handle_bmp280_config_get(httpd_req_t *req) {
 
-
-
-static esp_err_t handle_bmp280_config_get(httpd_req_t *req) {
-
-    ESP_LOGI(TAG, "GET request received at /bmp280_config");
     char response[256];
     snprintf(response, sizeof(response),
              "{"
@@ -345,8 +248,8 @@ static esp_err_t handle_bmp280_config_get(httpd_req_t *req) {
 }
 
 
-static esp_err_t handle_bmp280_config_post(httpd_req_t *req) {
-    ESP_LOGI(TAG, "POST request received at /bmp280_config");
+esp_err_t handle_bmp280_config_post(httpd_req_t *req) {
+    
     char buf[256];
     int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
     if (ret <= 0) {
@@ -395,7 +298,7 @@ static esp_err_t handle_bmp280_config_post(httpd_req_t *req) {
         } else {
             ESP_LOGE(TAG, "Nieprawidłowy format trybu pracy");
             cJSON_Delete(root);
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid mode value");
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Niepoprawna wartość");
             return ESP_FAIL;
         }
         ESP_LOGI(TAG, "Parsowanie JSON: tryb pracy = %d", new_config.mode);
@@ -480,4 +383,93 @@ void load_bmp280_config_from_nvs(bmp280_config_t *config) {
     } else {
         ESP_LOGW("NVS", "Brak zapisanej konfiguracji BMP280. Użyto domyślnej konfiguracji.");
     }
+}
+
+
+esp_err_t handle_set_mqtt_post(httpd_req_t *req) {
+    ESP_LOGI("HTTP", "Rozpoczęto obsługę żądania POST na /set_mqtt");
+    char buf[512];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1); // Odbierz dane
+    if (ret <= 0) {
+        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+            httpd_resp_send_408(req); // Wyślij błąd Timeout
+        }
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0'; // Dodaj terminator końca ciągu
+
+    char broker[128], user[64], password[64];
+    int port;
+    if (sscanf(buf, "mqtt_broker=%127[^&]&mqtt_port=%d&mqtt_user=%63[^&]&mqtt_password=%63s",
+               broker, &port, user, password) == 4) {
+        ESP_LOGI("HTTP", "Received MQTT config: broker=%s, port=%d, user=%s", broker, port, user);
+
+        // Zapisz dane MQTT do pamięci NVS
+        save_mqtt_config_to_nvs(broker, port, user, password);
+
+        httpd_resp_send(req, "MQTT configuration saved.", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    } else {
+        ESP_LOGE("HTTP", "Failed to parse MQTT configuration.");
+        httpd_resp_send(req, "Invalid MQTT configuration format.", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+
+
+}
+
+void save_mqtt_config_to_nvs(const char* broker, int port, const char* user, const char* password) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open("mqtt_config", NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd przy otwieraniu NVS");
+        return;
+    }
+
+    nvs_set_str(nvs_handle, "broker", broker);
+    nvs_set_i32(nvs_handle, "port", port);
+    nvs_set_str(nvs_handle, "user", user);
+    nvs_set_str(nvs_handle, "password", password);
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
+
+    ESP_LOGI("NVS", "Zapisano konfigurację MQTT: broker=%s, port=%d", broker, port);
+}
+
+void load_mqtt_config_from_nvs(char* broker, size_t broker_len, int* port, char* user, size_t user_len, char* password, size_t password_len) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open("mqtt_config", NVS_READONLY, &nvs_handle);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW("MQTT", "Nie znaleziono konfiguracji MQTT w NVS. Używanie domyślnych wartości.");
+        strncpy(broker, "mqtt://192.168.57.30", broker_len);
+        *port = 1883;
+        strncpy(user, "default_user", user_len);
+        strncpy(password, "default_password", password_len);
+        save_mqtt_config_to_nvs(broker, port, user, password); // Zapisz domyślne wartości
+        return;
+    } else if (err != ESP_OK) {
+        ESP_LOGE("MQTT", "Błąd przy otwieraniu NVS: %s", esp_err_to_name(err));
+        return;
+    }
+
+    if (nvs_get_str(nvs_handle, "broker", broker, &broker_len) != ESP_OK) {
+        ESP_LOGW("MQTT", "Brak klucza 'broker' w NVS. Ustawianie domyślnej wartości.");
+        strncpy(broker, "mqtt://192.168.57.30", broker_len);
+    }
+    if (nvs_get_i32(nvs_handle, "port", port) != ESP_OK) {
+        ESP_LOGW("MQTT", "Brak klucza 'port' w NVS. Ustawianie domyślnej wartości.");
+        *port = 1883;
+    }
+    if (nvs_get_str(nvs_handle, "user", user, &user_len) != ESP_OK) {
+        ESP_LOGW("MQTT", "Brak klucza 'user' w NVS. Ustawianie domyślnej wartości.");
+        strncpy(user, "default_user", user_len);
+    }
+    if (nvs_get_str(nvs_handle, "password", password, &password_len) != ESP_OK) {
+        ESP_LOGW("MQTT", "Brak klucza 'password' w NVS. Ustawianie domyślnej wartości.");
+        strncpy(password, "default_password", password_len);
+    }
+
+    nvs_close(nvs_handle);
+    ESP_LOGI("MQTT", "Konfiguracja MQTT załadowana: broker=%s, port=%d, user=%s", broker, *port, user);
 }

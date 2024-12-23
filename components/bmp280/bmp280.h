@@ -21,6 +21,9 @@
     .mode = BMP280_NORMAL_MODE \
 }
 
+extern float current_temperature_bmp280;
+extern float current_pressure_bmp280;
+
 /**
  * Tryby pracy czujnika BMP280.
  */

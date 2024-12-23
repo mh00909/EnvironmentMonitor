@@ -8,6 +8,9 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.6.0/nouislider.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.6.0/nouislider.min.js"></script>
+
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -38,6 +41,16 @@
         .data-item.light {
             background-color: #e5ffe5;
         }
+        #temperatureSlider, #lightSlider {
+            width: 30%;
+            height: 15px;
+            margin: 20px 0;
+        }
+
+        .noUi-connect {
+            background: #007bff; /* Kolor wypełnienia */
+        }
+
     </style>
 </head>
 <body>
@@ -70,6 +83,24 @@
                     </div>
                 </div>
             </div>
+            <!-- BLE Temperature -->
+            <div class="col">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">BLE Temperature</h5>
+                        <p id="ble-temperature-status" class="card-text display-6">-</p>
+                    </div>
+                </div>
+            </div>
+            <!-- BLE Humidity -->
+            <div class="col">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">BLE Humidity</h5>
+                        <p id="ble-humidity-status" class="card-text display-6">-</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Charts for visualizing data -->
@@ -83,9 +114,14 @@
             <div class="col text-center">
                 <canvas id="lightChart"></canvas>
             </div>
+            <div class="col text-center">
+                <canvas id="bleTemperatureChart"></canvas>
+            </div>
+            <div class="col text-center">
+                <canvas id="bleHumidityChart"></canvas>
+            </div>
         </div>
 
-        <!-- Logs section -->
         <div class="text-end my-3">
             <button id="toggle-log-button" class="btn btn-primary mt-2" onclick="toggleLogs()">
                 <i class="fas fa-list"></i> Show Logs
@@ -103,15 +139,47 @@
             </div>
         </div>
     </div>
-
+    <div class="mb-4">
+        <h5>Set Temperature Range (°C)</h5>
+        <div id="temperatureSlider" style="margin: 20px 0;"></div>
+        <div>
+            <label>Min:</label>
+            <span id="minTempValue">10</span>°C
+            <label>Max:</label>
+            <span id="maxTempValue">30</span>°C
+        </div>
+        <button id="setTemperatureRange" class="btn btn-primary mt-2">Set</button>
+    </div>
+    
+    
+    <div class="mb-4">
+        <h5>Set Light Range</h5>
+        <div id="lightSlider" style="margin: 20px 0;"></div>
+        <div>
+            <label>Min:</label>
+            <span id="minLightValue">100</span> lux
+            <label>Max:</label>
+            <span id="maxLightValue">800</span> lux
+        </div>
+        <button id="setLightRange" class="btn btn-primary mt-2">Set</button>
+    </div>
+    
+    
+    
     <script>
         const socket = io();
         const temperatureStatus = document.getElementById('temperature-status');
         const pressureStatus = document.getElementById('pressure-status');
         const lightStatus = document.getElementById('light-status');
+        const bleTemperatureStatus = document.getElementById('ble-temperature-status');
+        const bleHumidityStatus = document.getElementById('ble-humidity-status');
+
         const dataContainer = document.getElementById('data-container');
 
-        // Initialize charts
+        const temperatureSlider = document.getElementById('temperatureSlider');
+        const lightSlider = document.getElementById('lightSlider');
+
+        // Inicjalizacja wykresów
         const temperatureChart = new Chart(document.getElementById('temperatureChart').getContext('2d'), {
             type: 'line',
             data: { labels: [], datasets: [{ label: 'Temperature (°C)', data: [], borderColor: 'red', tension: 0.1 }] }
@@ -123,6 +191,14 @@
         const lightChart = new Chart(document.getElementById('lightChart').getContext('2d'), {
             type: 'line',
             data: { labels: [], datasets: [{ label: 'Light (lux)', data: [], borderColor: 'green', tension: 0.1 }] }
+        });
+        const bleTemperatureChart = new Chart(document.getElementById('bleTemperatureChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'BLE Temperature (°C)', data: [], borderColor: 'orange', tension: 0.1 }] }
+        });
+        const bleHumidityChart = new Chart(document.getElementById('bleHumidityChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'BLE Humidity (%)', data: [], borderColor: 'purple', tension: 0.1 }] }
         });
 
         function updateChart(chart, label, data) {
@@ -140,15 +216,22 @@
             const data = message.data;
             const timestamp = new Date().toLocaleTimeString();
 
-            if (topic.includes('temperature')) {
+            if (topic.includes('bmp280/temperature')) {
                 temperatureStatus.textContent = `${data.temperature} °C`;
                 updateChart(temperatureChart, timestamp, data.temperature);
-            } else if (topic.includes('pressure')) {
+            } else if (topic.includes('bmp280/pressure')) {
                 pressureStatus.textContent = `${data.pressure} hPa`;
                 updateChart(pressureChart, timestamp, data.pressure);
             } else if (topic.includes('light')) {
                 lightStatus.textContent = `${data.light} lux`;
                 updateChart(lightChart, timestamp, data.light);
+            }
+            if (topic.includes('ble/temperature')) {
+                bleTemperatureStatus.textContent = `${data.temperature} °C`;
+                updateChart(bleTemperatureChart, timestamp, data.temperature);
+            } else if (topic.includes('ble/humidity')) {
+                bleHumidityStatus.textContent = `${data.humidity} %`;
+                updateChart(bleHumidityChart, timestamp, data.humidity);
             }
 
             const element = document.createElement('div');
@@ -173,6 +256,75 @@
                 toggleButton.innerHTML = '<i class="fas fa-list"></i> Show Logs';
             }
         }
+
+
+        noUiSlider.create(temperatureSlider, {
+            start: [10, 30], // Początkowe wartości
+            connect: true,   // Pomiędzy wartościami wypełnienie
+            range: {
+                'min': 0,
+                'max': 50
+            },
+            step: 0.1,       // Kroki przesuwania
+            tooltips: [true, true] // Podpowiedzi przy uchwytach
+        });
+
+        // Aktualizacja wyświetlanych wartości
+        const minTempValue = document.getElementById('minTempValue');
+        const maxTempValue = document.getElementById('maxTempValue');
+
+        temperatureSlider.noUiSlider.on('update', function (values) {
+            minTempValue.textContent = parseFloat(values[0]).toFixed(1);
+            maxTempValue.textContent = parseFloat(values[1]).toFixed(1);
+        });
+
+        // Obsługa wysyłania danych do backendu
+        document.getElementById('setTemperatureRange').addEventListener('click', function () {
+            const [minTemperature, maxTemperature] = temperatureSlider.noUiSlider.get();
+
+            fetch('/set_temp_range', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    min_temperature: parseFloat(minTemperature),
+                    max_temperature: parseFloat(maxTemperature)
+                })
+            }).then(response => response.json()).then(data => console.log(data));
+        });
+        noUiSlider.create(lightSlider, {
+            start: [100, 800], // Początkowe wartości
+            connect: true,
+            range: {
+                'min': 0,
+                'max': 1000
+            },
+            step: 1, // Kroki przesuwania
+            tooltips: [true, true]
+        });
+
+        // Aktualizacja wyświetlanych wartości
+        const minLightValue = document.getElementById('minLightValue');
+        const maxLightValue = document.getElementById('maxLightValue');
+
+        lightSlider.noUiSlider.on('update', function (values) {
+            minLightValue.textContent = parseInt(values[0]);
+            maxLightValue.textContent = parseInt(values[1]);
+        });
+
+        // Obsługa wysyłania danych do backendu
+        document.getElementById('setLightRange').addEventListener('click', function () {
+            const [minLight, maxLight] = lightSlider.noUiSlider.get();
+
+            fetch('/set_light_range', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    min_light: parseInt(minLight),
+                    max_light: parseInt(maxLight)
+                })
+            }).then(response => response.json()).then(data => console.log(data));
+        });
+
     </script>
 </body>
 </html>

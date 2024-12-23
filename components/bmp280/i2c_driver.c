@@ -34,11 +34,12 @@ void i2c_scan() {
     ESP_LOGI(TAG, "Ukończono skan I2C.");
 }
 
-esp_err_t i2c_write_register(uint8_t device_addr, uint8_t reg_addr, uint8_t data) {
+// Zapis pojedynczego bajta do określonego rejestru
+esp_err_t i2c_write_register(uint8_t device_addr, uint8_t reg_addr, uint8_t data) { // adres urządzenia, adres rejestru, wartość
     ESP_LOGI("I2C", "Próba zapisu: addr=0x%02X, reg=0x%02X, val=0x%02X", device_addr, reg_addr, data);
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (device_addr << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_write_byte(cmd, (device_addr << 1) | I2C_MASTER_WRITE, true); // przesuwa adres o 1 w lewo i ustawia najmłodszy bit na 0
     i2c_master_write_byte(cmd, reg_addr, true);
     i2c_master_write_byte(cmd, data, true);
     i2c_master_stop(cmd);

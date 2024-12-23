@@ -84,14 +84,29 @@ void save_wifi_credentials_to_nvs(const char* ssid, const char* password) {
 
     ESP_LOGI("NVS", "Zapisano dane sieci Wi-Fi: SSID=%s", ssid);
 }
+void save_wifi_data_to_nvs() {
+    nvs_handle_t nvs_handle;
+    if (nvs_open("wifi_data", NVS_READWRITE, &nvs_handle) == ESP_OK) {
+        nvs_set_str(nvs_handle, "ssid", "test");
+        nvs_set_str(nvs_handle, "password", "haslo123");
+        nvs_commit(nvs_handle);
+        nvs_close(nvs_handle);
+        ESP_LOGI(TAG, "Dane Wi-Fi zapisane w NVS.");
+    } else {
+        ESP_LOGE(TAG, "Nie udało się otworzyć NVS do zapisu danych Wi-Fi.");
+    }
+}
+
 void connect_to_wifi() {
     nvs_handle_t nvs_handle;
     esp_err_t err = nvs_open("wifi_data", NVS_READONLY, &nvs_handle);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Błąd przy otwieraniu NVS. Sprawdź czy zapisano dane sieci Wi-Fi.");
-        return;
+        save_wifi_data_to_nvs();
+        err = nvs_open("wifi_data", NVS_READONLY, &nvs_handle);
     }
 
+    
+    
     char ssid[32], password[64];
     size_t ssid_len = sizeof(ssid);
     size_t password_len = sizeof(password);

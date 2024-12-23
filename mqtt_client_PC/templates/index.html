@@ -15,13 +15,23 @@
             margin: 20px;
             padding: 0;
             background-color: #f9f9f9;
+            padding: 20px;
         }
     
         h1 {
             text-align: center;
             color: #333;
         }
-        
+        button {
+            margin-bottom: 20px;
+            width: 30%;
+        }
+        .t-1 {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+            margin-left: 20px;
+        }
     </style>
 </head>
 <body>
@@ -30,14 +40,20 @@
         <button onclick="goToData()" class="btn btn-success">Przejdź do strony z danymi</button>
         <div class="config-box">
             <button onclick="switchToConfig()" class="btn btn-warning">Przejdź do konfiguracji</button>
-            <p>Aby przejść do trybu konfiguracji:</p>
-            <p>1. Kliknij dwukrotnie na przycisk BOOT na ESP32.</p>
-            <p>2. Połącz się z siecią ESP32-AP.</p>
-            <p>3. Kliknij na przycisk "Przejdź do konfiguracji".</p>
+            <div id="mode-status">Łączenie...</div>
+            <br><br>
+            <div class="t-1">
+                <p>Aby przejść do trybu konfiguracji:</p>
+                <p>1. Kliknij dwukrotnie na przycisk BOOT na ESP32.</p>
+                <p>2. Połącz się z siecią ESP32-AP.</p>
+                <p>3. Kliknij na przycisk "Przejdź do konfiguracji".</p>
+            </div>
         </div>
+        <button onclick="checkESP32Mode()" class="btn btn-secondary">Odśwież</button>
+
     </div>
     
-    <div id="mode-status">Łączenie...</div>
+    
     
 <script>
 
@@ -59,6 +75,8 @@
 
 
     function checkESP32Status() {
+        refreshMode();
+        setTimeout(3000);
         fetch('/sync_mode')
             .then(response => response.json())
             .then(data => {
@@ -70,10 +88,12 @@
     }
 
     // Regularne odświeżanie statusu
-    setInterval(checkESP32Status, 5000);
-    checkESP32Status();
+  //  setInterval(checkESP32Status, 5000);
+   // checkESP32Status();
 
      function switchToConfig() {
+        refreshMode();
+        setTimeout(3000);
             fetch('/switch_to_ap')
                 .then(response => {
                     if (response.ok) {
@@ -98,8 +118,26 @@
                             document.getElementById('mode-status').textContent = `Tryb ESP32: ${data.mode}`;
                         });
         }
-        setInterval(refreshMode, 5000);
-        refreshMode();
+      //  setInterval(refreshMode, 5000);
+        //refreshMode();
+
+
+        function checkESP32Mode() {
+            fetch('/sync_mode') 
+                .then(response => response.json())
+                .then(data => {
+                    if (data.mode) {
+                        document.getElementById('mode-status').textContent = `Tryb ESP32: ${data.mode}`;
+                    } else {
+                        document.getElementById('mode-status').textContent = "Nie udało się uzyskać stanu ESP32.";
+                    }
+                })
+                .catch(error => {
+                    console.error("Błąd podczas uzyskiwania stanu ESP32:", error);
+                    document.getElementById('mode-status').textContent = "Błąd połączenia z serwerem.";
+                });
+        }
+
     </script>
 </body>
 </html>
