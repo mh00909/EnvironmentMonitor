@@ -1,0 +1,7 @@
+<h4>Twoje urządzenia:</h4>
+<ul>
+    {% for device in user_devices %}
+        <li>{{ device }}</li>
+    {% endfor %}
+</ul>
+<a href="/devices/add-form" class="btn btn-success mt-3">Dodaj nowe urządzenie</a>

@@ -14,7 +14,7 @@
 static const char *TAG = "HTTP_SERVER";
 
 httpd_handle_t server = NULL;
-
+bool config_completed = false;
 
 httpd_handle_t start_webserver(void) {
     if (server != NULL) {
@@ -43,13 +43,18 @@ httpd_handle_t start_webserver(void) {
     return NULL;
 }
 
-void stop_webserver(httpd_handle_t server) {
-    if (server != NULL) {
-        esp_err_t err = httpd_stop(server);
-    
-        server = NULL;
-    } 
+void stop_webserver(httpd_handle_t *server) {
+    if (server != NULL && *server != NULL) {
+        esp_err_t err = httpd_stop(*server);
+        if (err == ESP_OK) {
+            ESP_LOGI("WEB_SERVER", "HTTP server stopped successfully.");
+        } else {
+            ESP_LOGE("WEB_SERVER", "Failed to stop HTTP server: %s", esp_err_to_name(err));
+        }
+        *server = NULL;  
+    }
 }
+
 
 /* Przejście do STA z AP */
 static esp_err_t handle_confirm_wifi(httpd_req_t *req) {
@@ -154,6 +159,31 @@ void register_endpoints(httpd_handle_t server) {
         .user_ctx = NULL,
     };
     httpd_register_uri_handler(server, &mqtt_post);
+
+
+    httpd_uri_t power_config_get = {
+        .uri       = "/power_config",
+        .method    = HTTP_GET,
+        .handler   = handle_power_config_get,
+        .user_ctx  = NULL
+    };
+    httpd_register_uri_handler(server, &power_config_get);
+
+    httpd_uri_t power_config_post = {
+        .uri       = "/power_config",
+        .method    = HTTP_POST,
+        .handler   = handle_power_config_post,
+        .user_ctx  = NULL
+    };
+    httpd_register_uri_handler(server, &power_config_post);
+
+    httpd_uri_t complete_config_endpoint = {
+        .uri       = "/complete_config",
+        .method    = HTTP_POST,
+        .handler   = handle_complete_config,
+        .user_ctx  = NULL
+    };
+    httpd_register_uri_handler(server, &complete_config_endpoint);
 
 }
 
@@ -436,7 +466,6 @@ void save_mqtt_config_to_nvs(const char* broker, int port, const char* user, con
 
     ESP_LOGI("NVS", "Zapisano konfigurację MQTT: broker=%s, port=%d", broker, port);
 }
-
 void load_mqtt_config_from_nvs(char* broker, size_t broker_len, int* port, char* user, size_t user_len, char* password, size_t password_len) {
     nvs_handle_t nvs_handle;
     esp_err_t err = nvs_open("mqtt_config", NVS_READONLY, &nvs_handle);
@@ -446,21 +475,35 @@ void load_mqtt_config_from_nvs(char* broker, size_t broker_len, int* port, char*
         *port = 1883;
         strncpy(user, "default_user", user_len);
         strncpy(password, "default_password", password_len);
-        save_mqtt_config_to_nvs(broker, port, user, password); // Zapisz domyślne wartości
+        
+        // Zapisz domyślne wartości do NVS
+        nvs_handle_t nvs_handle_write;
+        if (nvs_open("mqtt_config", NVS_READWRITE, &nvs_handle_write) == ESP_OK) {
+            save_mqtt_config_to_nvs(broker, port, user, password);
+            nvs_close(nvs_handle_write);
+        } else {
+            ESP_LOGE("MQTT", "Błąd przy otwieraniu NVS do zapisu wartości domyślnych.");
+        }
         return;
     } else if (err != ESP_OK) {
         ESP_LOGE("MQTT", "Błąd przy otwieraniu NVS: %s", esp_err_to_name(err));
         return;
     }
 
+    // Odczyt poszczególnych kluczy z NVS
     if (nvs_get_str(nvs_handle, "broker", broker, &broker_len) != ESP_OK) {
         ESP_LOGW("MQTT", "Brak klucza 'broker' w NVS. Ustawianie domyślnej wartości.");
         strncpy(broker, "mqtt://192.168.57.30", broker_len);
     }
-    if (nvs_get_i32(nvs_handle, "port", port) != ESP_OK) {
+    
+    int32_t temp_port;
+    if (nvs_get_i32(nvs_handle, "port", &temp_port) != ESP_OK) {
         ESP_LOGW("MQTT", "Brak klucza 'port' w NVS. Ustawianie domyślnej wartości.");
         *port = 1883;
+    } else {
+        *port = temp_port; // Przypisanie wartości portu
     }
+
     if (nvs_get_str(nvs_handle, "user", user, &user_len) != ESP_OK) {
         ESP_LOGW("MQTT", "Brak klucza 'user' w NVS. Ustawianie domyślnej wartości.");
         strncpy(user, "default_user", user_len);
@@ -471,5 +514,65 @@ void load_mqtt_config_from_nvs(char* broker, size_t broker_len, int* port, char*
     }
 
     nvs_close(nvs_handle);
+
     ESP_LOGI("MQTT", "Konfiguracja MQTT załadowana: broker=%s, port=%d, user=%s", broker, *port, user);
 }
+
+
+
+esp_err_t handle_power_config_get(httpd_req_t *req) {
+    char response[128];
+    snprintf(response, sizeof(response),
+             "{"
+             "\"power_mode\": %d,"
+             "\"deep_sleep_duration\": %d"
+             "}",
+             esp32_config.power_mode,
+             esp32_config.deep_sleep_duration);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+esp_err_t handle_power_config_post(httpd_req_t *req) {
+    char buf[128];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    if (ret <= 0) {
+        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+            httpd_resp_send_408(req);
+        }
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+    ESP_LOGI("HTTP_SERVER", "Received POST data: %s", buf);
+
+    cJSON *root = cJSON_Parse(buf);
+    if (!root) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    if (cJSON_HasObjectItem(root, "power_mode")) {
+        esp32_config.power_mode = cJSON_GetObjectItem(root, "power_mode")->valueint;
+    }
+    if (cJSON_HasObjectItem(root, "deep_sleep_duration")) {
+        esp32_config.deep_sleep_duration = cJSON_GetObjectItem(root, "deep_sleep_duration")->valueint;
+    }
+
+    save_device_config_to_nvs();
+    cJSON_Delete(root);
+
+    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+
+esp_err_t handle_complete_config(httpd_req_t *req) {
+    config_completed = true; 
+    httpd_resp_send(req, "{\"message\":\"Configuration complete.\"}", HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+
+

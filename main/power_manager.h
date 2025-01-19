@@ -4,12 +4,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-typedef enum {
-    MODE_STANDARD,
-    MODE_POWER_SAVE
-} PowerMode;
+typedef struct {
+    int power_mode; // 0: Normalny, 1: Oszczędzanie, 2: Deep Sleep
+    int deep_sleep_duration; // Czas w sekundach dla deep sleep
+} config_esp32;
 
-void set_power_mode(PowerMode mode);
+extern config_esp32 esp32_config;
+
+
+
+void save_device_config_to_nvs();
+int load_device_config_from_nvs();
 void power_manager_task(void *pvParameters);
 
 #endif // POWER_MANAGER_H

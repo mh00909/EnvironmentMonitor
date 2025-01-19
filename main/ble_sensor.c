@@ -33,8 +33,9 @@ uint16_t battery_service_end_handle = 0;
 
 float current_temperature_ble = 0.0; // Przechowuje odczytaną temperaturę
 float current_humidity_ble = 0.0;    // Przechowuje odczytaną wilgotność
+bool ble_connected = false;
 
-
+static bool is_scanning = false;
 static bool is_connected = false; // czy zostało nawiązane połączenie
 static bool connection_in_progress = false; // czy jest wykonywana teraz próba nawiązania połączenia
 static esp_gattc_char_elem_t *char_elem_result = NULL; // przechowuje wyniki wyszukiwania charakterystyk GATT
@@ -201,7 +202,7 @@ void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc
                 break;
             }
             ESP_LOGI(GATTC_TAG, "open success");
-          
+            ble_connected = true;
             break;
 
         // Zakończono odkrywanie usług GATT
@@ -230,17 +231,17 @@ void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc
             if (p_data->search_res.srvc_id.uuid.len == ESP_UUID_LEN_16) { // Czy UUID ma 16 bitów
                 uint16_t uuid = p_data->search_res.srvc_id.uuid.uuid.uuid16;
                 if (uuid == ENVIRONMENT_SERVICE_UUID) {
-                    ESP_LOGI(GATTC_TAG, "Environmental Sensing Service found.");
+                   // ESP_LOGI(GATTC_TAG, "Environmental Sensing Service found.");
                     // Zapisanie uchwytów usługi
                     gattc_profile.service_start_handle = p_data->search_res.start_handle;
                     gattc_profile.service_end_handle = p_data->search_res.end_handle;
                 } else if (uuid == BATTERY_SERVICE_UUID) {
-                    ESP_LOGI(GATTC_TAG, "Battery Service found.");
+                    //ESP_LOGI(GATTC_TAG, "Battery Service found.");
                     battery_service_start_handle = p_data->search_res.start_handle;
                     battery_service_end_handle = p_data->search_res.end_handle;
                 }
-                ESP_LOGI(GATTC_TAG, "Temperature handle: %d, Humidity handle: %d, Battery handle: %d",
-                 gattc_profile.char_handle, humidity_char_handle, battery_char_handle);
+              //  ESP_LOGI(GATTC_TAG, "Temperature handle: %d, Humidity handle: %d, Battery handle: %d",
+                // gattc_profile.char_handle, humidity_char_handle, battery_char_handle);
             }
             break;
 
@@ -250,7 +251,7 @@ void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc
                 ESP_LOGE(GATTC_TAG, "Search service failed, error status = %x", p_data->search_cmpl.status);
                 break;
             }
-            ESP_LOGI(GATTC_TAG, "Search complete, services discovered.");
+        //    ESP_LOGI(GATTC_TAG, "Search complete, services discovered.");
             uint8_t ready_flag = 1;
             esp_err_t write_ret = esp_ble_gattc_write_char(
                 gattc_if,
@@ -264,7 +265,7 @@ void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc
             if (write_ret != ESP_OK) {
                 ESP_LOGE(GATTC_TAG, "Failed to write to ready characteristic: %s", esp_err_to_name(write_ret));
             } else {
-                ESP_LOGI(GATTC_TAG, "Client is ready, written to characteristic.");
+           //     ESP_LOGI(GATTC_TAG, "Client is ready, written to characteristic.");
             }
             // Wyszukiwanie charakterystyk w Environmental Sensing Service
             if (gattc_profile.service_start_handle && // Jeśli uchwyty są ustawione, to usługa została znaleziona
@@ -301,10 +302,10 @@ void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc
                         &count);
                     if (status == ESP_GATT_OK && count > 0) { // Jeśli znaleziono, to zapisuje uchwyt i rejestruje powiadomienia
                         gattc_profile.char_handle = char_elem_result[0].char_handle;
-                        esp_ble_gattc_register_for_notify(
-                            gattc_if,
-                            gattc_profile.remote_bda,
-                            char_elem_result[0].char_handle);
+                        // esp_ble_gattc_register_for_notify(
+                        //     gattc_if,
+                        //     gattc_profile.remote_bda,
+                        //     char_elem_result[0].char_handle);
                     } else {
                         ESP_LOGE(GATTC_TAG, "Temperature characteristic not found");
                     }
@@ -324,10 +325,10 @@ void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc
                         &count);
                     if (status == ESP_GATT_OK && count > 0) {
                         humidity_char_handle = char_elem_result[0].char_handle;
-                        esp_ble_gattc_register_for_notify(
-                            gattc_if,
-                            gattc_profile.remote_bda,
-                            humidity_char_handle);
+                        // esp_ble_gattc_register_for_notify(
+                        //     gattc_if,
+                        //     gattc_profile.remote_bda,
+                        //     humidity_char_handle);
                     } else {
                         ESP_LOGE(GATTC_TAG, "Humidity characteristic not found");
                     }
@@ -371,10 +372,10 @@ void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc
                     if (status == ESP_GATT_OK && count > 0) {
                         battery_char_handle = char_elem_result[0].char_handle;
                         // Rejestracja powiadomień dla Battery Level
-                        esp_ble_gattc_register_for_notify(
-                            gattc_if,
-                            gattc_profile.remote_bda,
-                            battery_char_handle);
+                        // esp_ble_gattc_register_for_notify(
+                        //     gattc_if,
+                        //     gattc_profile.remote_bda,
+                        //     battery_char_handle);
                     } else {
                         ESP_LOGE(GATTC_TAG, "Battery Level characteristic not found");
                     }
@@ -411,14 +412,38 @@ void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc
             esp_log_buffer_hex(GATTC_TAG, bda, sizeof(esp_bd_addr_t)); // logowanie adresu urządzenia
             break;
         }
+
+        case ESP_GATTC_READ_CHAR_EVT: {
+            if (param->read.status == ESP_GATT_OK) {
+                // Sprawdzenie, czy odczyt dotyczy charakterystyki temperatury
+                if (param->read.handle == gattc_profile.char_handle) {
+                    int16_t raw_temp = (param->read.value[1] << 8) | param->read.value[0];
+                    current_temperature_ble = raw_temp / 10.0;
+                    ESP_LOGI(GATTC_TAG, "Read temperature: %.2f°C", current_temperature_ble);
+                }
+                // Sprawdzenie, czy odczyt dotyczy charakterystyki wilgotności
+                else if (param->read.handle == humidity_char_handle) {
+                    int16_t raw_hum = (param->read.value[1] << 8) | param->read.value[0];
+                    current_humidity_ble = raw_hum / 100.0;
+                    ESP_LOGI(GATTC_TAG, "Read humidity: %.2f%%", current_humidity_ble);
+                }
+            } else {
+                ESP_LOGE(GATTC_TAG, "Read characteristic failed, status = %d", param->read.status);
+            }
+            break;
+        }
+
   
         // Rozłączenie BLE
         case ESP_GATTC_DISCONNECT_EVT:
+            is_scanning = false;
             is_connected = false;
             ESP_LOGI(GATTC_TAG, "ESP_GATTC_DISCONNECT_EVT, reason = %d", p_data->disconnect.reason);
             connection_in_progress = false;
+            ble_connected = false;
             ESP_LOGI(GATTC_TAG, "Disconnected, restarting scan...");
-            esp_ble_gap_start_scanning(60);esp_ble_gap_start_scanning(60);
+            esp_ble_gap_start_scanning(60);
+            is_scanning = true;
             
             break;
 
@@ -438,6 +463,7 @@ void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
     case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT: {
         ESP_LOGI(GATTC_TAG, "Scan parameters set.");
         uint32_t duration = 60; // czas trwania skanowania: 60 s
+        is_scanning = true;
         esp_ble_gap_start_scanning(duration);
         break;
     }
@@ -532,4 +558,41 @@ void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_ga
         }
         
     } while (0);
+}
+
+esp_err_t read_ble_data() {
+    esp_err_t status;
+
+    // Odczyt temperatury
+    status = esp_ble_gattc_read_char(
+        gattc_profile.gattc_if,
+        gattc_profile.conn_id,
+        gattc_profile.char_handle,
+        ESP_GATT_AUTH_REQ_NONE
+    );
+    if (status != ESP_OK) {
+        ESP_LOGE(GATTC_TAG, "Failed to read temperature: %s", esp_err_to_name(status));
+        return status;
+    }
+
+    // Czekaj na zakończenie odczytu temperatury
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    // Odczyt wilgotności
+    status = esp_ble_gattc_read_char(
+        gattc_profile.gattc_if,
+        gattc_profile.conn_id,
+        humidity_char_handle,
+        ESP_GATT_AUTH_REQ_NONE
+    );
+    if (status != ESP_OK) {
+        ESP_LOGE(GATTC_TAG, "Failed to read humidity: %s", esp_err_to_name(status));
+        return status;
+    }
+
+    return ESP_OK;
+}
+
+bool esp_ble_gap_is_scanning() {
+    return is_scanning;
 }

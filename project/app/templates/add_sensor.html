@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dodaj czujnik</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="text-center text-primary">Dodaj czujnik i metryki</h1>
+        <form method="POST" action="/devices/add-sensor">
+            <div class="mb-3">
+                <label for="device_id" class="form-label">Urządzenie:</label>
+                <input type="text" class="form-control" id="device_id" name="device_id" required>
+            </div>
+            <div class="mb-3">
+                <label for="sensor_id" class="form-label">ID czujnika:</label>
+                <input type="text" class="form-control" id="sensor_id" name="sensor_id" required>
+            </div>
+            <div class="mb-3">
+                <label for="metric_id" class="form-label">Metryki (oddzielone przecinkami):</label>
+                <input type="text" class="form-control" id="metric_id" name="metric_id" placeholder="np. temperature,pressure" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Dodaj</button>
+        </form>
+        <a href="/" class="btn btn-secondary mt-3">Powrót</a>
+    </div>
+</body>
+</html>

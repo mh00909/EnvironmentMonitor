@@ -26,11 +26,13 @@ bool wifi_connected = false;
 /* Event handler dla zdarzeń wifi */
 static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
+    int led_state=0;
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) { // Tryb STATION się uruchomił
         if(!is_config_mode) {
             esp_wifi_connect();
         }
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) { // Rozłączenie 
+        
         wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*) event_data;
         ESP_LOGI(TAG, "Rozłączono z Wi-Fi. Powód: %d", event->reason);
         wifi_connected = false;
@@ -45,6 +47,9 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
 
         if (!is_config_mode) {
             ESP_LOGI(TAG, "Próba ponownego połączenia z siecią station...");
+            gpio_set_level(BLINK_GPIO, led_state);
+            led_state = !led_state;
+            vTaskDelay(pdMS_TO_TICKS(500));
             esp_wifi_connect();
         }
         

@@ -17,6 +17,6 @@ extern int current_light;
 
 void light_sensor_init(void);
 void light_sensor_read(int* light);
-float light_sensor_to_percentage(uint16_t adc_value);
+float light_sensor_to_percentage(uint16_t lux_value);
 
 #endif // LIGHT_SENSOR_H

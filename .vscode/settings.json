@@ -35,7 +35,11 @@
         "http_server.h": "c",
         "task.h": "c",
         "cjson.h": "c",
-        "bmp280.h": "c"
+        "bmp280.h": "c",
+        "gpio.h": "c",
+        "stdbool.h": "c",
+        "power_manager.h": "c",
+        "ota_update.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc",
     "idf.gitPath": "git"
