@@ -1,4 +1,5 @@
 import json
+from time import sleep
 from paho.mqtt.client import Client
 from app.extensions import socketio
 from app.database import get_user_topics
@@ -79,12 +80,17 @@ def publish_user_topic(user_id, device_id, sensor_type, metric, value):
 # Funkcja do publikowania dodania nowego użytkownika i urządzenia
 def publish_add_client(user_id):
     topic = "/system/add_client"
-    payload = json.dumps({"user_id": str(user_id)})  # Konwersja user_id na string
+    payload = json.dumps({"user_id": str(user_id)})
     try:
+        if not mqtt_client.is_connected():
+            print("MQTT client is not connected. Retrying...")
+            setup_mqtt(user_id=user_id)  # Spróbuj ponownie połączyć
+            sleep(2)
         mqtt_client.publish(topic, payload, retain=True)
         print(f"Published to {topic} with retain: {payload}")
     except Exception as e:
         print(f"Error publishing to {topic}: {e}")
+
 
 
 def publish_add_device(user_id, device_id):
@@ -150,7 +156,7 @@ def publish_user_data(user_id):
     for device in devices:
         # Publikacja urządzenia
         topic = "/system/add_device"
-        payload = json.dumps({"user_id": user_id, "device_id": device['device_id']})
+        payload = json.dumps({"user_id": str(user_id), "device_id": device['device_id']})
         mqtt_client.publish(topic, payload, retain=True)
         print(f"Published to {topic}: {payload}")
 
@@ -160,7 +166,7 @@ def publish_user_data(user_id):
             # Publikacja czujnika
             topic = "/system/add_sensor"
             payload = json.dumps({
-                "user_id": user_id,
+                "user_id": str(user_id),
                 "device_id": device['device_id'],
                 "sensor_id": sensor['sensor_type']
             })
@@ -173,7 +179,7 @@ def publish_user_data(user_id):
                 # Publikacja metryki
                 topic = "/system/add_metric"
                 payload = json.dumps({
-                    "user_id": user_id,
+                    "user_id": str(user_id),
                     "device_id": device['device_id'],
                     "sensor_id": sensor['sensor_type'],
                     "metric_id": metric['metric']

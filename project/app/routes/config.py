@@ -1,8 +1,11 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, render_template
+import requests
 from app.mqtt_handler import mqtt_client  # Import klienta MQTT
 import json
 
+
 config_bp = Blueprint('config', __name__)
+
 
 # Ustawianie zakresu temperatury
 @config_bp.route('/set_temp_range', methods=['POST'])
@@ -35,3 +38,16 @@ def set_light_range():
         print(f"Published to {topic}: {payload}")
         return jsonify({"message": "Light range updated and published successfully!"}), 200
     return jsonify({"error": "Invalid data"}), 400
+
+
+def load_config(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def save_config(file_path, config_data):
+    with open(file_path, 'w') as file:
+        json.dump(config_data, file, indent=4)
+

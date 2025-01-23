@@ -15,6 +15,7 @@
     "idf.toolsPath": "/home/monika/.espressif",
     "idf.flashType": "UART",
     "files.associations": {
+        "*.sqlbook": "sql",
         "*.ndjson": "jsonl",
         "*.dbclient-js": "javascript",
         "freertos.h": "c",
@@ -39,7 +40,9 @@
         "gpio.h": "c",
         "stdbool.h": "c",
         "power_manager.h": "c",
-        "ota_update.h": "c"
+        "ota_update.h": "c",
+        "esp_wifi.h": "c",
+        "stdlib.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc",
     "idf.gitPath": "git"

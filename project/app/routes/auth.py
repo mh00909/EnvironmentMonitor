@@ -1,3 +1,4 @@
+from time import sleep
 from flask import Blueprint, request, redirect, render_template, session, url_for, flash
 from app.database import add_subscription, get_db_connection, hash_password, check_password
 from app.mqtt_handler import mqtt_client, publish_add_client, publish_add_device, subscribe_to_metrics, publish_add_metric, publish_user_data, setup_mqtt
@@ -71,8 +72,10 @@ def login():
 
             # Publikacja na temat /system/add_client
             publish_add_client(user['id'])
+            sleep(2)
             # Pobranie urządzeń, czujników i metryk
             publish_user_data(user['id'])
+            sleep(2)
             subscribe_to_metrics(user['id'])
             flash("Login successful!", "success")
             return redirect(url_for('devices.index'))  # Przejście na stronę główną
@@ -103,8 +106,6 @@ def logout():
 
 
 
-
-
 @auth_bp.route('/account/settings', methods=['GET'])
 def account_settings():
     if 'user_id' not in session:
@@ -115,9 +116,19 @@ def account_settings():
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # Pobierz email użytkownika
+    cursor.execute('SELECT email FROM users WHERE id = ?', (user_id,))
+    user_email = cursor.fetchone()['email']
+
     # Pobierz urządzenia użytkownika
     cursor.execute('SELECT device_id FROM devices WHERE user_id = ?', (user_id,))
     user_devices = [row['device_id'] for row in cursor.fetchall()]
+
+    # Pobierz czujniki dla każdego urządzenia
+    user_sensors = {}
+    for device in user_devices:
+        cursor.execute('SELECT sensor_type FROM sensors WHERE user_id = ? AND device_id = ?', (user_id, device))
+        user_sensors[device] = [row['sensor_type'] for row in cursor.fetchall()]
 
     # Pobierz subskrypcje
     cursor.execute('SELECT topic FROM subscriptions WHERE user_id = ?', (user_id,))
@@ -127,13 +138,8 @@ def account_settings():
 
     return render_template(
         'account_settings.html',
-        email="user@example.com",
+        email=user_email,
         user_devices=user_devices,
-        user_subscriptions=user_subscriptions,
-        available_devices=['ESP32-01', 'ESP32-02'],
-        selected_devices=[],
-        available_sensors=['bmp280', 'photoresistor', 'ble'],
-        selected_sensors=[],
-        available_metrics=['temperature', 'humidity', 'light'],
-        selected_metrics=[]
+        user_sensors=user_sensors,
+        user_subscriptions=user_subscriptions
     )

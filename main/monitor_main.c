@@ -27,7 +27,6 @@
 #include "esp_log.h"
 #include <esp_timer.h>
 #include "ble_sensor.h"
-#include "power_manager.h"
 #include "esp_bt.h"
 #include "esp_sleep.h"
 
@@ -124,9 +123,14 @@ void button_timer_callback(void* arg) {
             ESP_LOGI("LIGHT", "Światło: %d lux", current_light);
 
             // Publikacja MQTT
-            publish_bmp280_data("user1", "device1");
-            publish_light_sensor_data("user1", "device1");
-            publish_ble_data("user1", "device1");
+            for (int i = 0; i < user_count; i++) {
+                for (int j = 0; j < users[i].device_count; j++) {
+                    // Wykonaj pomiary i publikuj dane
+                    publish_bmp280_data(users[i].user_id, users[i].devices[j].device_id);
+                    publish_light_sensor_data(users[i].user_id, users[i].devices[j].device_id);
+                    publish_ble_data(users[i].user_id, users[i].devices[j].device_id);
+                }
+            }
         } else { // wyjście z trybu konfiguracji
             xTaskNotify(config_task_handle, 2, eSetValueWithoutOverwrite);
         }
@@ -424,20 +428,7 @@ void app_main(void) {
     configure_button();
     configure_led();
 
-    // Załadowanie konfiguracji trybu zasilania z NVS
-    ESP_LOGI("MAIN", "Ładowanie konfiguracji trybu zasilania z NVS...");
-    int current_power_mode = load_device_config_from_nvs();
-    if (current_power_mode == 0) {
-        ESP_LOGI("MAIN", "Tryb zasilania: Normalny. Wszystkie funkcje aktywne.");
-    } else if (current_power_mode == 1) {
-        ESP_LOGI("MAIN", "Tryb zasilania: Niskie zużycie. Ograniczone funkcje.");
-    } else if (current_power_mode == 2) {
-        ESP_LOGI("MAIN", "Tryb zasilania: Deep Sleep.");
-        // Możesz w tym miejscu skonfigurować przejście do trybu głębokiego snu
-    } else {
-        ESP_LOGW("MAIN", "Nieznany tryb zasilania: %d. Domyślnie ustawiono tryb normalny.", current_power_mode);
-        current_power_mode = 0;
-    }
+
 
     // Inicjalizacja Wi-Fi
     ESP_LOGI("MAIN", "Inicjalizacja Wi-Fi...");
@@ -515,9 +506,6 @@ void app_main(void) {
     ESP_LOGI("MAIN", "Tworzenie taska monitorującego warunki środowiskowe...");
     xTaskCreate(&monitor_conditions_task, "monitor_conditions_task", 8192, NULL, 3, NULL);
 
-    // Uruchomienie menedżera zasilania
-    //ESP_LOGI("MAIN", "Uruchamianie menedżera zasilania...");
-    //xTaskCreate(&power_manager_task, "power_manager_task", 4096, NULL, 1, NULL);
 
     ESP_LOGI("MAIN", "Inicjalizacja zakończona pomyślnie.");
 

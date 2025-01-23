@@ -1,0 +1,15 @@
+<h4>Twoje urządzenia:</h4>
+<ul id="deviceList"></ul>
+
+<script>
+    fetch('/devices/list')
+        .then(response => response.json())
+        .then(devices => {
+            const list = document.getElementById('deviceList');
+            devices.forEach(device => {
+                const listItem = document.createElement('li');
+                listItem.textContent = `${device.device_id} (Status: ${device.status})`;
+                list.appendChild(listItem);
+            });
+        });
+</script>

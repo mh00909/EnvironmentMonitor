@@ -41,34 +41,20 @@
         .data-item.light {
             background-color: #e5ffe5;
         }
-        #temperatureSlider, #lightSlider {
-            width: 30%;
-            height: 10px;
-            margin: 20px 0;
-        }
-
-        .noUi-connect {
-            background: #007bff; 
-        }
-
-        .sliders {
-            display: flex;
-            position: fixed;
-            bottom: 20px;
-        }
+        
 
     </style>
 </head>
 <body>
 
     <div class="container mt-4">
-        <h1 class="text-center text-primary">ESP32 Environment Monitor</h1>
+        <h1 class="text-center text-primary">Monitor środowiskowy</h1>
 
         <div class="row text-center my-4">
             <div class="col">
                 <div class="card shadow-sm">
                     <div class="card-body">
-                        <h5 class="card-title">Temperature</h5>
+                        <h5 class="card-title">Temperatura</h5>
                         <p id="temperature-status" class="card-text display-6">-</p>
                     </div>
                 </div>
@@ -76,7 +62,7 @@
             <div class="col">
                 <div class="card shadow-sm">
                     <div class="card-body">
-                        <h5 class="card-title">Pressure</h5>
+                        <h5 class="card-title">Ciśnienie</h5>
                         <p id="pressure-status" class="card-text display-6">-</p>
                     </div>
                 </div>
@@ -84,7 +70,7 @@
             <div class="col">
                 <div class="card shadow-sm">
                     <div class="card-body">
-                        <h5 class="card-title">Light</h5>
+                        <h5 class="card-title">Światło</h5>
                         <p id="light-status" class="card-text display-6">-</p>
                     </div>
                 </div>
@@ -93,7 +79,7 @@
             <div class="col">
                 <div class="card shadow-sm">
                     <div class="card-body">
-                        <h5 class="card-title">BLE Temperature</h5>
+                        <h5 class="card-title">BLE Temperatura</h5>
                         <p id="ble-temperature-status" class="card-text display-6">-</p>
                     </div>
                 </div>
@@ -102,7 +88,7 @@
             <div class="col">
                 <div class="card shadow-sm">
                     <div class="card-body">
-                        <h5 class="card-title">BLE Humidity</h5>
+                        <h5 class="card-title">BLE Wilgotność</h5>
                         <p id="ble-humidity-status" class="card-text display-6">-</p>
                     </div>
                 </div>
@@ -130,47 +116,22 @@
 
         <div class="text-end my-3">
             <button id="toggle-log-button" class="btn btn-primary mt-2" onclick="toggleLogs()">
-                <i class="fas fa-list"></i> Show Logs
+                <i class="fas fa-list"></i> Logi
             </button>
         </div>
 
         <div id="log-section" class="card" style="display: none;">
             <div class="card-header">
-                Data Log
+                Logi
             </div>
             <div class="card-body" id="data-container" style="max-height: 250px; overflow-y: auto;">
             </div>
             <div class="card-footer text-end">
-                <button class="btn btn-danger" onclick="clearLogs()">Clear Logs</button>
+                <button class="btn btn-danger" onclick="clearLogs()">Wyczyść logi</button>
             </div>
         </div>
     </div>
-    <div class="sliders">
-        <div class="mb-4">
-            <p>Set Temperature Range (°C)</p>
-            <div id="temperatureSlider" style="margin: 20px 0; margin-right: 30px; width:200px"></div>
-            <div>
-                <label>Min:</label>
-                <span id="minTempValue">10</span>°C
-                <label>Max:</label>
-                <span id="maxTempValue">30</span>°C
-            </div>
-            <button id="setTemperatureRange" class="btn btn-primary mt-2">Set</button>
-        </div>
-        
-        
-        <div class="mb-4">
-            <p>Set Light Range</p>
-            <div id="lightSlider" style="margin: 20px 0; width: 200px"></div>
-            <div>
-                <label>Min:</label>
-                <span id="minLightValue">100</span> lux
-                <label>Max:</label>
-                <span id="maxLightValue">800</span> lux
-            </div>
-            <button id="setLightRange" class="btn btn-primary mt-2">Set</button>
-        </div>
-    </div>
+    
     
     
     
@@ -190,23 +151,23 @@
         // Inicjalizacja wykresów
         const temperatureChart = new Chart(document.getElementById('temperatureChart').getContext('2d'), {
             type: 'line',
-            data: { labels: [], datasets: [{ label: 'Temperature (°C)', data: [], borderColor: 'red', tension: 0.1 }] }
+            data: { labels: [], datasets: [{ label: 'Temperatura (°C)', data: [], borderColor: 'red', tension: 0.1 }] }
         });
         const pressureChart = new Chart(document.getElementById('pressureChart').getContext('2d'), {
             type: 'line',
-            data: { labels: [], datasets: [{ label: 'Pressure (hPa)', data: [], borderColor: 'blue', tension: 0.1 }] }
+            data: { labels: [], datasets: [{ label: 'Ciśnienie (hPa)', data: [], borderColor: 'blue', tension: 0.1 }] }
         });
         const lightChart = new Chart(document.getElementById('lightChart').getContext('2d'), {
             type: 'line',
-            data: { labels: [], datasets: [{ label: 'Light (lux)', data: [], borderColor: 'green', tension: 0.1 }] }
+            data: { labels: [], datasets: [{ label: 'Światło (lux)', data: [], borderColor: 'green', tension: 0.1 }] }
         });
         const bleTemperatureChart = new Chart(document.getElementById('bleTemperatureChart').getContext('2d'), {
             type: 'line',
-            data: { labels: [], datasets: [{ label: 'BLE Temperature (°C)', data: [], borderColor: 'orange', tension: 0.1 }] }
+            data: { labels: [], datasets: [{ label: 'BLE Temperatura (°C)', data: [], borderColor: 'orange', tension: 0.1 }] }
         });
         const bleHumidityChart = new Chart(document.getElementById('bleHumidityChart').getContext('2d'), {
             type: 'line',
-            data: { labels: [], datasets: [{ label: 'BLE Humidity (%)', data: [], borderColor: 'purple', tension: 0.1 }] }
+            data: { labels: [], datasets: [{ label: 'BLE Wilgotność (%)', data: [], borderColor: 'purple', tension: 0.1 }] }
         });
 
         function updateChart(chart, label, data) {
@@ -266,70 +227,7 @@
         }
 
 
-        noUiSlider.create(temperatureSlider, {
-            start: [10, 30],
-            connect: true,  
-            range: {
-                'min': 0,
-                'max': 50
-            },
-            step: 0.1,  
-            tooltips: [false, false] 
-        });
-
-        const minTempValue = document.getElementById('minTempValue');
-        const maxTempValue = document.getElementById('maxTempValue');
-
-        temperatureSlider.noUiSlider.on('update', function (values) {
-            minTempValue.textContent = parseFloat(values[0]).toFixed(1);
-            maxTempValue.textContent = parseFloat(values[1]).toFixed(1);
-        });
-
-        document.getElementById('setTemperatureRange').addEventListener('click', function () {
-            const [minTemperature, maxTemperature] = temperatureSlider.noUiSlider.get();
-
-            fetch('/set_temp_range', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    min_temperature: parseFloat(minTemperature),
-                    max_temperature: parseFloat(maxTemperature)
-                })
-            }).then(response => response.json()).then(data => console.log(data));
-        });
-        noUiSlider.create(lightSlider, {
-            start: [100, 800], 
-            connect: true,
-            range: {
-                'min': 0,
-                'max': 1000
-            },
-            step: 1, 
-            tooltips: [false, false]
-        });
-
-        // Aktualizacja wyświetlanych wartości
-        const minLightValue = document.getElementById('minLightValue');
-        const maxLightValue = document.getElementById('maxLightValue');
-
-        lightSlider.noUiSlider.on('update', function (values) {
-            minLightValue.textContent = parseInt(values[0]);
-            maxLightValue.textContent = parseInt(values[1]);
-        });
-
-        // Obsługa wysyłania danych do backendu
-        document.getElementById('setLightRange').addEventListener('click', function () {
-            const [minLight, maxLight] = lightSlider.noUiSlider.get();
-
-            fetch('/set_light_range', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    min_light: parseInt(minLight),
-                    max_light: parseInt(maxLight)
-                })
-            }).then(response => response.json()).then(data => console.log(data));
-        });
+        
 
     </script>
 </body>

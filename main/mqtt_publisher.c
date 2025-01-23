@@ -24,7 +24,6 @@
 #include "mqtt_client.h"
 #include "ble_sensor.h"
 #include "light_sensor.h"
-#include "ota_update.h"
 #include "../../v5.3.1/esp-idf/components/json/cJSON/cJSON.h"
 
 
@@ -68,9 +67,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI("MQTT_EVENT", "Połączono z brokerem MQTT.");
-            mqtt_connected = true;
 
-            // Subskrypcja na temat
+
             esp_mqtt_client_subscribe(client_handle, "/system/add_client", 1);
             esp_mqtt_client_subscribe(client_handle, "/system/add_device", 1);
             esp_mqtt_client_subscribe(client_handle, "/system/add_metric", 1);
@@ -78,6 +76,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             
             esp_mqtt_client_subscribe(client_handle, "/system/settings/temp_range", 1);
             esp_mqtt_client_subscribe(client_handle, "/system/settings/light_range", 1);
+            mqtt_connected = true;
+
             break;
 
         case MQTT_EVENT_DISCONNECTED:
@@ -237,7 +237,7 @@ void safe_publish(esp_mqtt_client_handle_t client, const char *topic, const char
         if (err == ESP_OK) {
             ESP_LOGI("MQTT", "Pomyślnie opublikowano dane na temat: %s", topic);
         } else {
-            ESP_LOGE("MQTT", "Błąd publikacji na temat %s: %s", topic, esp_err_to_name(err));
+            //ESP_LOGE("MQTT", "Błąd publikacji na temat %s: %s", topic, esp_err_to_name(err));
         }
         xSemaphoreGive(mqtt_mutex);
     } else {
@@ -340,17 +340,25 @@ void publish_ble_data(const char *user, const char *device) {
 void sensor_data_task(void *pvParameters) {
     esp_mqtt_client_handle_t client = (esp_mqtt_client_handle_t) pvParameters;
 
+    bmp280_config_t config;
+    load_bmp280_config_from_nvs(&config); // Wczytaj tryb BMP280 z konfiguracji
+
     while (1) {
-        for (int i = 0; i < user_count; i++) {
-            for (int j = 0; j < users[i].device_count; j++) {
-                publish_bmp280_data(users[i].user_id, users[i].devices[j].device_id);
-                publish_light_sensor_data(users[i].user_id, users[i].devices[j].device_id);
-                publish_ble_data(users[i].user_id, users[i].devices[j].device_id);
+        if (config.mode == BMP280_NORMAL_MODE) {
+            // Automatyczna publikacja danych w trybie NORMAL
+            for (int i = 0; i < user_count; i++) {
+                for (int j = 0; j < users[i].device_count; j++) {
+                    publish_bmp280_data(users[i].user_id, users[i].devices[j].device_id);
+                    publish_light_sensor_data(users[i].user_id, users[i].devices[j].device_id);
+                    publish_ble_data(users[i].user_id, users[i].devices[j].device_id);
+                }
             }
         }
+
         vTaskDelay(pdMS_TO_TICKS(30000)); // 30 sekund
     }
 }
+
 
 
 
@@ -385,13 +393,7 @@ void handle_light_range(const char *topic, const char *data) {
     ESP_LOGI(TAG, "Updated light range: %d - %d", min_light, max_light);
 }
 
-void handle_ota_update(const char *topic, const char *data) {
-    if (strcmp(data, "start") == 0) {
-        mqtt_stop();
-        ESP_LOGI("MQTT", "Rozpoczęcie aktualizacji OTA.");
-        xTaskCreate(&ota_task, "ota_task", 8192, NULL, 2, NULL);
-    }
-}
+
 
 
 void mqtt_initialize(void) {
@@ -453,19 +455,18 @@ void mqtt_initialize(void) {
     }
 
 
-    // char temp_range_topic[100];
-    // char light_range_topic[100];
-    // char ota_update_topic[100];
-
-    // snprintf(temp_range_topic, sizeof(temp_range_topic), "/%s/%s/control/temp_range", user_id, device_id);
-    // snprintf(light_range_topic, sizeof(light_range_topic), "/%s/%s/control/light_range", user_id, device_id);
-    // snprintf(ota_update_topic, sizeof(ota_update_topic), "/%s/%s/ota_update", user_id, device_id);
-
-    // register_topic_handler(temp_range_topic, handle_temp_range);
-    // register_topic_handler(light_range_topic, handle_light_range);
-    // register_topic_handler(ota_update_topic, handle_ota_update);
 
     mqtt_initialized = true;
+
+
+    // Subskrypcja na temat
+    esp_mqtt_client_subscribe(client_handle, "/system/add_client", 1);
+    esp_mqtt_client_subscribe(client_handle, "/system/add_device", 1);
+    esp_mqtt_client_subscribe(client_handle, "/system/add_metric", 1);
+    esp_mqtt_client_subscribe(client_handle, "/system/add_sensor", 1);
+    
+    esp_mqtt_client_subscribe(client_handle, "/system/settings/temp_range", 1);
+    esp_mqtt_client_subscribe(client_handle, "/system/settings/light_range", 1);
 }
 
 

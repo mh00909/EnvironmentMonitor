@@ -6,12 +6,14 @@
 #include "wifi_ap.h"
 #include "freertos/FreeRTOS.h"
 #include "esp_http_server.h"
+#include "mqtt_publisher.h"
 #include "bmp280.h"
 #include "../../v5.3.1/esp-idf/components/json/cJSON/cJSON.h"
 #include "nvs.h"
 
 
 static const char *TAG = "HTTP_SERVER";
+static EventGroupHandle_t wifi_event_group;
 
 httpd_handle_t server = NULL;
 bool config_completed = false;
@@ -161,21 +163,7 @@ void register_endpoints(httpd_handle_t server) {
     httpd_register_uri_handler(server, &mqtt_post);
 
 
-    httpd_uri_t power_config_get = {
-        .uri       = "/power_config",
-        .method    = HTTP_GET,
-        .handler   = handle_power_config_get,
-        .user_ctx  = NULL
-    };
-    httpd_register_uri_handler(server, &power_config_get);
 
-    httpd_uri_t power_config_post = {
-        .uri       = "/power_config",
-        .method    = HTTP_POST,
-        .handler   = handle_power_config_post,
-        .user_ctx  = NULL
-    };
-    httpd_register_uri_handler(server, &power_config_post);
 
     httpd_uri_t complete_config_endpoint = {
         .uri       = "/complete_config",
@@ -359,11 +347,36 @@ esp_err_t handle_bmp280_config_post(httpd_req_t *req) {
     return ESP_OK;
 }
 
+// esp_err_t handle_switch_to_station(httpd_req_t *req) {
+//     ESP_LOGI("HTTP_SERVER", "Przełączanie do trybu Station (STA)");
+
+//     // Powiadom task o przejściu na tryb STA
+//     xTaskNotify(config_task_handle, 2, eSetValueWithoutOverwrite);
+
+//     // Odpowiedź dla klienta
+//     httpd_resp_set_type(req, "application/json");
+//     httpd_resp_sendstr(req, "{\"message\":\"ESP32 przełączono do trybu Station.\"}");
+
+//     return ESP_OK;
+// }
+
 esp_err_t handle_switch_to_station(httpd_req_t *req) {
     ESP_LOGI("HTTP_SERVER", "Przełączanie do trybu Station (STA)");
 
     // Powiadom task o przejściu na tryb STA
     xTaskNotify(config_task_handle, 2, eSetValueWithoutOverwrite);
+
+    // Poczekaj, aż Wi-Fi w STA nawiąże połączenie
+    EventBits_t wifi_bits = xEventGroupWaitBits(wifi_event_group, 1, pdFALSE, pdTRUE, pdMS_TO_TICKS(10000));
+    if (!(wifi_bits)) {
+        ESP_LOGE("HTTP_SERVER", "Nie udało się połączyć w trybie Station.");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Wi-Fi niepołączone w trybie STA.");
+        return ESP_FAIL;
+    }
+
+    // Restart MQTT Client
+    ESP_LOGI("HTTP_SERVER", "Restart klienta MQTT.");
+    restart_mqtt_client();
 
     // Odpowiedź dla klienta
     httpd_resp_set_type(req, "application/json");
@@ -520,52 +533,8 @@ void load_mqtt_config_from_nvs(char* broker, size_t broker_len, int* port, char*
 
 
 
-esp_err_t handle_power_config_get(httpd_req_t *req) {
-    char response[128];
-    snprintf(response, sizeof(response),
-             "{"
-             "\"power_mode\": %d,"
-             "\"deep_sleep_duration\": %d"
-             "}",
-             esp32_config.power_mode,
-             esp32_config.deep_sleep_duration);
 
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
-}
 
-esp_err_t handle_power_config_post(httpd_req_t *req) {
-    char buf[128];
-    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
-    if (ret <= 0) {
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            httpd_resp_send_408(req);
-        }
-        return ESP_FAIL;
-    }
-    buf[ret] = '\0';
-    ESP_LOGI("HTTP_SERVER", "Received POST data: %s", buf);
-
-    cJSON *root = cJSON_Parse(buf);
-    if (!root) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
-        return ESP_FAIL;
-    }
-
-    if (cJSON_HasObjectItem(root, "power_mode")) {
-        esp32_config.power_mode = cJSON_GetObjectItem(root, "power_mode")->valueint;
-    }
-    if (cJSON_HasObjectItem(root, "deep_sleep_duration")) {
-        esp32_config.deep_sleep_duration = cJSON_GetObjectItem(root, "deep_sleep_duration")->valueint;
-    }
-
-    save_device_config_to_nvs();
-    cJSON_Delete(root);
-
-    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
-}
 
 
 esp_err_t handle_complete_config(httpd_req_t *req) {

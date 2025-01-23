@@ -25,14 +25,18 @@ def init_db():
     ''')
 
     # Tabela urządzeń
+    # Tabela urządzeń
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS devices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
-        device_id TEXT NOT NULL,
+        device_id TEXT UNIQUE NOT NULL,
+        status TEXT DEFAULT 'active',
+        registration_date DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     )
     ''')
+
 
     # Tabela czujników
     cursor.execute('''
@@ -211,3 +215,51 @@ def get_sensor_metrics(user_id, device_id, sensor_type):
     return metrics
 
 
+def transfer_device(device_id, new_user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Pobierz aktualnego właściciela urządzenia
+        cursor.execute('SELECT user_id FROM devices WHERE device_id = ?', (device_id,))
+        result = cursor.fetchone()
+        if not result:
+            print(f"Device {device_id} does not exist.")
+            return False
+
+        old_user_id = result['user_id']
+
+        # Zaktualizuj właściciela urządzenia
+        cursor.execute(
+            'UPDATE devices SET user_id = ?, status = ? WHERE device_id = ?',
+            (new_user_id, 'transferred', device_id)
+        )
+        conn.commit()
+
+        # Opcjonalne logowanie transferu
+        cursor.execute(
+            'INSERT INTO device_logs (device_id, action, old_user_id, new_user_id) VALUES (?, ?, ?, ?)',
+            (device_id, 'transfer', old_user_id, new_user_id)
+        )
+        conn.commit()
+
+        print(f"Device {device_id} successfully transferred from user {old_user_id} to user {new_user_id}.")
+        return True
+    except sqlite3.Error as e:
+        print(f"Error transferring device: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+
+def get_device_status(device_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT status FROM devices WHERE device_id = ?', (device_id,))
+    result = cursor.fetchone()
+    conn.close()
+
+    if result:
+        return result['status']
+    return None

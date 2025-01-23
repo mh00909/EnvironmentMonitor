@@ -1,7 +1,177 @@
-<h4>Twoje urządzenia:</h4>
-<ul>
-    {% for device in user_devices %}
-        <li>{{ device }}</li>
-    {% endfor %}
-</ul>
-<a href="/devices/add-form" class="btn btn-success mt-3">Dodaj nowe urządzenie</a>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ustawienia konta</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.6.0/nouislider.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.6.0/nouislider.min.js"></script>
+<style>
+
+    ul {
+        list-style-type: none;
+    }
+    #temperatureSlider, #lightSlider {
+        width: 30%;
+        height: 10px;
+        margin: 20px 0;
+    }
+
+    .noUi-connect {
+        background: #007bff; 
+    }
+
+    .sliders {
+        display: flex;
+    }
+
+</style>
+    
+
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="text-center text-primary">Ustawienia konta</h1>
+        <div class="card mt-4">
+            <div class="card-body">
+                <h4>Twój email:</h4>
+                <p>{{ email }}</p>
+                <hr>
+                <h4>Twoje urządzenia:</h4>
+                <ul>
+                    {% for device in user_devices %}
+                        <li>{{ device }}</li>
+                    {% endfor %}
+                </ul>
+                <a href="/devices/add-form" class="btn btn-success mt-3">Dodaj nowe urządzenie</a>
+                <a href="/devices/transfer-form" class="btn btn-warning mt-3">Przenieś urządzenie</a>
+                <hr>
+                <h4 style="margin-top: 20px;">Twoje czujniki:</h4>
+                <ul>
+                    {% for device, sensors in user_sensors.items() %}
+                        <li>
+                            <strong>{{ device }}</strong>
+                            <ul>
+                                {% for sensor in sensors %}
+                                    <li>{{ sensor }}</li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                    {% endfor %}
+                </ul>
+                <a href="/devices/add-sensor" class="btn btn-primary mt-3">Dodaj nowy czujnik</a>
+
+                <br>
+                <hr>
+
+
+
+                <div class="sliders">
+                    <div class="mb-4">
+                        <p>Ustal zakres temperatury</p>
+                        <div id="temperatureSlider" style="margin: 20px 0; margin-right: 30px; width:200px"></div>
+                        <div>
+                            <label>Min:</label>
+                            <span id="minTempValue">10</span>°C
+                            <label>Max:</label>
+                            <span id="maxTempValue">30</span>°C
+                        </div>
+                        <button id="setTemperatureRange" class="btn btn-primary mt-2">Set</button>
+                    </div>
+                    
+                    
+                    <div class="mb-4">
+                        <p>Ustal zakres światła</p>
+                        <div id="lightSlider" style="margin: 20px 0; width: 200px"></div>
+                        <div>
+                            <label>Min:</label>
+                            <span id="minLightValue">100</span> lux
+                            <label>Max:</label>
+                            <span id="maxLightValue">800</span> lux
+                        </div>
+                        <button id="setLightRange" class="btn btn-primary mt-2">Set</button>
+                    </div>
+                </div>
+
+                <br>
+
+
+                <a href="/" class="btn btn-secondary mt-3">Powrót</a>
+            </div>
+        </div>
+    </div>
+</body>
+
+<script>
+    noUiSlider.create(temperatureSlider, {
+            start: [10, 30],
+            connect: true,  
+            range: {
+                'min': 0,
+                'max': 50
+            },
+            step: 0.1,  
+            tooltips: [false, false] 
+        });
+
+        const minTempValue = document.getElementById('minTempValue');
+        const maxTempValue = document.getElementById('maxTempValue');
+
+        temperatureSlider.noUiSlider.on('update', function (values) {
+            minTempValue.textContent = parseFloat(values[0]).toFixed(1);
+            maxTempValue.textContent = parseFloat(values[1]).toFixed(1);
+        });
+
+        document.getElementById('setTemperatureRange').addEventListener('click', function () {
+            const [minTemperature, maxTemperature] = temperatureSlider.noUiSlider.get();
+
+            fetch('/set_temp_range', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    min_temperature: parseFloat(minTemperature),
+                    max_temperature: parseFloat(maxTemperature)
+                })
+            }).then(response => response.json()).then(data => console.log(data));
+        });
+        noUiSlider.create(lightSlider, {
+            start: [100, 800], 
+            connect: true,
+            range: {
+                'min': 0,
+                'max': 1000
+            },
+            step: 1, 
+            tooltips: [false, false]
+        });
+
+        // Aktualizacja wyświetlanych wartości
+        const minLightValue = document.getElementById('minLightValue');
+        const maxLightValue = document.getElementById('maxLightValue');
+
+        lightSlider.noUiSlider.on('update', function (values) {
+            minLightValue.textContent = parseInt(values[0]);
+            maxLightValue.textContent = parseInt(values[1]);
+        });
+
+        // Obsługa wysyłania danych do backendu
+        document.getElementById('setLightRange').addEventListener('click', function () {
+            const [minLight, maxLight] = lightSlider.noUiSlider.get();
+
+            fetch('/set_light_range', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    min_light: parseInt(minLight),
+                    max_light: parseInt(maxLight)
+                })
+            }).then(response => response.json()).then(data => console.log(data));
+        });
+</script>
+
+</html>

@@ -3,106 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Data Dashboard</title>
+    <title>Strona główna</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
-            padding: 0;
             background-color: #f9f9f9;
             padding: 20px;
         }
-    
-        h1 {
+        h1, h2 {
             text-align: center;
             color: #333;
         }
-        button {
-            margin-bottom: 20px;
-            width: 30%;
+        ul {
+            list-style-type: none;
+            padding: 0;
         }
-        .t-1 {
+        li {
+            margin-bottom: 10px;
+        }
+        .btn-logout {
+            margin-top: 20px;
+        }
+        .control-buttons button {
+            margin: 10px 0;
+        }
+
+
+
+
+        .device-header {
+            font-size: 1.5rem;
+            color: #333;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 0.5rem;
+        }
+
+        .device-container {
             display: flex;
             flex-direction: column;
-            text-align: left;
-            margin-left: 20px;
+            gap: 1rem;
         }
+
+        .device-item {
+            font-size: 1rem;
+            color: #333;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            background-color: #f9f9f9;
+            padding: 0.5rem;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .device-name {
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .sensor-name {
+            font-weight: bold;
+            color: #555;
+        }
+
+        .metric-list {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .metric-item {
+            font-style: italic;
+            color: #444;
+        }
+
+        .control-buttons {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .control-buttons button {
+            width: 300px;
+        }
+        i {
+            margin-right: 10px;
+        }
+
     </style>
 </head>
 <body>
 
-    <div class="text-center mt-4">
-        <button onclick="goToData()" class="btn btn-success">Odczyty z czujników</button>
-        <button onclick="goToAccountSettings()" class="btn btn-primary">Ustawienia konta</button>
-        <div class="config-box">
-            <button onclick="switchToConfig()" class="btn btn-warning">Konfiguracja urządzenia</button>
-            <div id="mode-status">Łączenie...</div>
-            <br><br>
-            <div class="t-1">
-                <p>Aby przejść do trybu konfiguracji:</p>
-                <p>1. Kliknij dwukrotnie na przycisk BOOT na ESP32.</p>
-                <p>2. Połącz się z siecią ESP32-AP.</p>
-                <p>3. Kliknij na przycisk "Konfiguracja urządzenia".</p>
-            </div>
+    <div class="container">
+        <!-- Welcome Header -->
+        <div class="text-center">
+            <h2 class="text-primary">Witaj, {{ email }}</h2>
         </div>
-        <!-- <button onclick="triggerOTAUpdate()" class="btn btn-danger">OTA Update</button> -->
+        <button onclick="logout()" class="btn btn-danger btn-sm btn-logout" style="position: fixed; right: 100px; top: 10px">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            Wyloguj się
+        </button>
+        <hr>
 
-        <button onclick="checkESP32Mode()" class="btn btn-secondary">Odśwież</button>
+        
+        <h4 class="device-header">Twoje urządzenia:</h4>
+        <div class="device-container">
+            {% for device, device_sensors in sensors.items() %}
+                <div class="device-item">
+                    <strong class="device-name">{{ device }}</strong>: 
+                    {% for sensor, metric_list in device_sensors.items() %}
+                        <span class="sensor-name">{{ sensor }}</span> 
+                        (<span class="metric-list">
+                            {% for metric in metric_list %}
+                                <span class="metric-item">{{ metric }}</span>{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        </span>)
+                        {% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
 
+
+        
+        <hr>
+
+        <div class="control-buttons">
+            <button onclick="goToData()" class="btn btn-success">
+                <i class="fa-solid fa-chart-line"></i>
+                Odczyty z czujników
+            </button>
+            <button onclick="goToAccountSettings()" class="btn btn-primary">
+                <i class="fa-solid fa-user"></i>
+                Ustawienia konta
+            </button>
+            <button onclick="switchToConfig()" class="btn btn-warning">
+                <i class="fa-solid fa-gear"></i>
+                Konfiguracja urządzenia
+            </button>
+        </div>
+
+        <!-- Configuration Info -->
+        <div class="config-box mt-4">
+            <div id="mode-status" class="text-center">Łączenie...</div>
+            <div class="t-1 mt-3">
+                <p>Aby przejść do trybu konfiguracji:</p>
+                <ol>
+                    <li>Kliknij dwukrotnie na przycisk BOOT na ESP32.</li>
+                    <li>Połącz się z siecią ESP32-AP.</li>
+                    <li>Kliknij na przycisk "Konfiguracja urządzenia".</li>
+                </ol>
+            </div>
+            <button onclick="checkESP32Mode()" class="btn btn-secondary w-100 mt-3">
+                <i class="fa-solid fa-arrow-rotate-right"></i>
+                Odśwież
+            </button>
+        </div>
     </div>
-    
-    
-    
-<script>
 
-    const selectedUserId = localStorage.getItem('selectedUserId');
-    if (selectedUserId) {
-        console.log(`Selected User ID: ${selectedUserId}`);
-    }
+    <!-- JavaScript -->
+    <script>
+        const selectedUserId = localStorage.getItem('selectedUserId');
+        if (selectedUserId) {
+            console.log(`Selected User ID: ${selectedUserId}`);
+        }
 
+        function logout() {
+            fetch('/auth/logout')
+                .then(() => {
+                    window.location.href = '/auth/login';
+                })
+                .catch((error) => {
+                    console.error("Błąd podczas wylogowywania:", error);
+                    alert("Nie udało się wylogować.");
+                });
+        }
 
-    function triggerOTAUpdate() {
-        fetch('/ota_update', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => {
-            if (response.ok) {
-                alert("Rozpoczęto aktualizację OTA.");
-            } else {
-                response.text().then(text => alert("Błąd: " + text));
-            }
-        })
-        .catch(error => {
-            console.error("Błąd podczas aktualizacji OTA:", error);
-            alert("Nie udało się rozpocząć aktualizacji OTA.");
-        });
-    }
-
-    function checkESP32Status() {
-        refreshMode();
-        setTimeout(3000);
-        fetch('/sync_mode')
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('mode-status').textContent = `Tryb ESP32: ${data.mode}`;
+        function triggerOTAUpdate() {
+            fetch('/ota_update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
             })
-            .catch(() => {
-                document.getElementById('mode-status').textContent = "Brak połączenia z ESP32";
-            });
-    }
+            .then(response => {
+                if (response.ok) {
+                    alert("Rozpoczęto aktualizację OTA.");
+                } else {
+                    response.text().then(text => alert("Błąd: " + text));
+                }
+            })
+            .catch(error => alert("Nie udało się rozpocząć aktualizacji OTA."));
+        }
 
-  
-     function switchToConfig() {
-        refreshMode();
-        setTimeout(3000);
+        function checkESP32Status() {
+            fetch('/sync_mode')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('mode-status').textContent = `Tryb ESP32: ${data.mode}`;
+                })
+                .catch(() => {
+                    document.getElementById('mode-status').textContent = "Brak połączenia z ESP32";
+                });
+        }
+
+        function switchToConfig() {
             fetch('/switch_to_ap')
                 .then(response => {
                     if (response.ok) {
@@ -118,20 +224,15 @@
         }
 
         function goToData() {
-            window.open("/data", '_blank');
+            window.open("/devices/data", '_blank');
         }
-        function refreshMode() {
-                    fetch('/sync_mode')
-                        .then(response => response.json())
-                        .then(data => {
-                            document.getElementById('mode-status').textContent = `Tryb ESP32: ${data.mode}`;
-                        });
-        }
-  
 
+        function goToAccountSettings() {
+            window.location.href = "/auth/account/settings";
+        }
 
         function checkESP32Mode() {
-            fetch('/sync_mode') 
+            fetch('/sync_mode')
                 .then(response => response.json())
                 .then(data => {
                     if (data.mode) {
@@ -145,10 +246,7 @@
                     document.getElementById('mode-status').textContent = "Błąd połączenia z serwerem.";
                 });
         }
-        
-        function goToAccountSettings() {
-            window.location.href = "/auth/account/settings";
-        }
     </script>
+
 </body>
 </html>

@@ -3,7 +3,6 @@
 
 #include "esp_http_server.h"
 #include "bmp280.h"
-#include "power_manager.h"
 #include <stdbool.h>
 
 
