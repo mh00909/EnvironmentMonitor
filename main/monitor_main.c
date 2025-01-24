@@ -33,12 +33,13 @@
 
 #define BLINK_GPIO 2
 #define BUTTON_GPIO_PIN 0
-#define WAKEUP_GPIO GPIO_NUM_13
+#define READ_GPIO GPIO_NUM_13
 
 
 static bool led_state = false;  // stan diody ON/OFF
 bool is_config_mode = false;
 extern httpd_handle_t server;
+bool is_measuring = false;
 
 static esp_timer_handle_t button_timer; // Timer do obsługi timeout dla kliknięć
 static uint32_t click_count = 0;        // Licznik kliknięć
@@ -62,19 +63,6 @@ void gpio_init(void) {
         .intr_type = GPIO_INTR_DISABLE // Brak przerwań
     };
     gpio_config(&io_conf);
-
-    // Konfiguracja GPIO dla przycisku
-    io_conf.pin_bit_mask = (1ULL << WAKEUP_GPIO); // Pin przycisku
-    io_conf.mode = GPIO_MODE_INPUT; // Wejście
-    io_conf.pull_up_en = GPIO_PULLUP_ENABLE; // Włącz pull-up (przycisk podłączony do GND)
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    gpio_config(&io_conf);
-    gpio_hold_en(WAKEUP_GPIO);
-    gpio_deep_sleep_hold_en();
-
-    // Włącz wybudzanie na GPIO
-    esp_sleep_enable_ext1_wakeup((1ULL << WAKEUP_GPIO), ESP_EXT1_WAKEUP_ANY_HIGH);
-    ESP_LOGI("WAKEUP", "GPIO %d skonfigurowane jako źródło wybudzania.", WAKEUP_GPIO);
 }
 
 // Obsługa przerwania dla przycisku 
@@ -95,6 +83,28 @@ static void IRAM_ATTR button_isr_handler(void* arg) {
 
     last_interrupt_time = current_interrupt_time;
 }
+
+
+void IRAM_ATTR read_gpio_isr_handler(void* arg) {
+    static uint32_t last_interrupt_time = 0;
+    uint32_t current_interrupt_time = xTaskGetTickCountFromISR();
+
+    // Sprawdź, czy przerwanie jest wyzwalane rzadziej niż co 200 ms
+    if ((current_interrupt_time - last_interrupt_time) > pdMS_TO_TICKS(200)) {
+    //    ESP_LOGI("ISR", "Przerwanie wywołane na READ_GPIO.");
+
+        if (!is_measuring) {
+            is_measuring = true;
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            vTaskNotifyGiveFromISR(config_task_handle, &xHigherPriorityTaskWoken);
+            portYIELD_FROM_ISR();
+        }
+    }
+
+    last_interrupt_time = current_interrupt_time;
+}
+
+
 
 // Wykrywanie kliknięć przycisku (pojedyncze lub podwójne) 
 void button_timer_callback(void* arg) {
@@ -163,8 +173,6 @@ void configure_button() {
     };
     gpio_config(&io_conf);
 
-    // Inicjalizacja przerwań GPIO
-    gpio_install_isr_service(ESP_INTR_FLAG_LEVEL3);
     gpio_isr_handler_add(BUTTON_GPIO_PIN, button_isr_handler, NULL);
 
     // Inicjalizacja timera
@@ -174,38 +182,6 @@ void configure_button() {
     };
     esp_timer_create(&timer_args, &button_timer);
 }
-
-// Konfiguracja przycisku wybudzającego z deep sleep
-void configure_wakeup_gpio() {
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << WAKEUP_GPIO),
-        .mode = GPIO_MODE_INPUT,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .pull_up_en = GPIO_PULLUP_ENABLE, // Włącz pull-up dla przycisku podłączonego do GND
-        .intr_type = GPIO_INTR_DISABLE // Brak przerwań (tylko wybudzanie)
-    };
-    gpio_config(&io_conf);
-}
-
-// Sprawdzenie powodu wybudzenia
-void handle_wakeup_reason() {
-    esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
-
-    switch (wakeup_reason) {
-        case ESP_SLEEP_WAKEUP_EXT1:
-            ESP_LOGI("WAKEUP", "Wybudzono przyciskiem GPIO.");
-            break;
-
-        case ESP_SLEEP_WAKEUP_TIMER:
-            ESP_LOGI("WAKEUP", "Wybudzono timerem.");
-            break;
-
-        default:
-            ESP_LOGI("WAKEUP", "Wybudzenie z nieznanego powodu (%d).", wakeup_reason);
-            break;
-    }
-}
-
 
 /* Nasłuchuje na powiadomienia z systemu i przełącza między trybem AP i STA */
 void config_mode_task(void* arg) {
@@ -265,6 +241,57 @@ void config_mode_task(void* arg) {
         }
     }
 }
+
+void configure_read_gpio() {
+    gpio_config_t io_conf = {
+        .intr_type = GPIO_INTR_NEGEDGE, // Przerwanie przy opadającym zboczu
+        .mode = GPIO_MODE_INPUT,        // Pin jako wejście
+        .pin_bit_mask = (1ULL << READ_GPIO), // Przypisanie GPIO_NUM_13
+        .pull_down_en = 0,
+        .pull_up_en = 1,                // Włącz pull-up dla przycisku
+    };
+    gpio_config(&io_conf);
+
+    gpio_isr_handler_add(READ_GPIO, read_gpio_isr_handler, NULL);
+}
+
+
+
+void read_gpio_task(void* arg) {
+    while (1) {
+        // Czekaj na powiadomienie
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        ESP_LOGI("READ", "Rozpoczynanie pomiaru czujników...");
+
+        // Wykonaj pomiar temperatury i ciśnienia z BMP280
+        float temperature, pressure;
+        bmp280_read_data(&temperature, &pressure);
+        pressure /= 100.0; // Konwersja ciśnienia na hPa
+        ESP_LOGI("BMP280", "Temperatura: %.2f °C, Ciśnienie: %.2f hPa", temperature, pressure);
+
+        // Wykonaj pomiar światła
+        int light_level = 0;
+        light_sensor_read(&light_level);
+        ESP_LOGI("LIGHT", "Poziom światła: %d lux", light_level);
+
+        // Odczyt danych BLE, jeśli są dostępne
+        if (ble_connected) {
+            esp_err_t ble_status = read_ble_data();
+            if (ble_status == ESP_OK) {
+                ESP_LOGI("BLE", "Temperatura BLE: %.2f °C, Wilgotność BLE: %.2f%%", 
+                         current_temperature_ble, current_humidity_ble);
+            } else {
+                ESP_LOGW("BLE", "Nie udało się odczytać danych BLE.");
+            }
+        }
+
+        // Zakończenie pomiaru
+        is_measuring = false;
+        ESP_LOGI("READ", "Pomiary zakończone.");
+    }
+}
+
 
 
 
@@ -422,10 +449,10 @@ void app_main(void) {
 
     // Inicjalizacja GPIO, przycisków i LED
     ESP_LOGI("MAIN", "Inicjalizacja GPIO i przycisków...");
+    ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_LEVEL3));
     gpio_init();
-    handle_wakeup_reason();
-    configure_wakeup_gpio();
     configure_button();
+    configure_read_gpio();
     configure_led();
 
 
@@ -455,6 +482,10 @@ void app_main(void) {
     xTaskCreate(config_mode_task, "config_mode_task", 4096, NULL, 4, &config_task_handle);
 
     vTaskDelay(pdMS_TO_TICKS(500));
+
+    ESP_LOGI("MAIN", "Tworzenie taska do obsługi pomiarów...");
+    xTaskCreate(read_gpio_task, "read_gpio_task", 4096, NULL, 5, &config_task_handle);
+
 
     // Uruchomienie serwera HTTP
     ESP_LOGI("MAIN", "Uruchamianie serwera HTTP...");
