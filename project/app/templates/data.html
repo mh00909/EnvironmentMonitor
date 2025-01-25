@@ -175,7 +175,7 @@
             const statusElement = document.getElementById(statusId);
             if (statusElement) {
                 const metricKey = Object.keys(data)[0];
-                statusElement.textContent = `${data[metricKey]} ${metricKey === 'temperature' ? '°C' : metricKey === 'pressure' ? 'hPa' : metricKey === 'light' ? 'lux' : ''}`;
+                statusElement.textContent = `${data[metricKey]} ${metricKey === 'temperature' ? '°C' : metricKey === 'pressure' ? 'hPa' :metricKey === 'humidity' ? '%' : metricKey === 'light' ? 'lux' : ''}`;
             }
 
             // Aktualizacja wykresu

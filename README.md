@@ -37,6 +37,31 @@ The ESP32 Environment Monitor is an IoT-based project designed to monitor enviro
 - **Button (GPIO):** Manual trigger for sensor measurements.
 
 
+### Project structure
+```
+.
+├── components/              # Reusable components for ESP32
+│   ├── bmp280/              # BMP280 sensor driver  
+│   └── sensor_handler/      # Sensor management utilities
+├── main/                    # Main firmware source for ESP32
+│
+├── project/                 # Server-side application (Flask)
+│   ├── app/                 # Flask application logic
+│   │   ├── routes/          # Routes for handling HTTP requests
+│   │   ├── templates/       # HTML templates for the user interface
+│   │   ├── database.py      # Database connection and operations
+│   │   ├── extensions.py    # Flask extensions 
+│   │   ├── main.py          # Main entry point for the Flask application
+│   │   └── mqtt_handler.py  # MQTT communication handling
+│   ├── environment_monitor.db # SQLite database for user and device management
+│   ├── bmp280_config.json   # Default configuration for BMP280
+│   ├── mqtt_config.json     # Configuration for the MQTT broker
+│   └── run.py               # Script to start the Flask server
+│          
+└── partitions.csv           # Partition table for the ESP32 firmware
+```
+
+
 ---
 
 ### Installation
@@ -51,4 +76,9 @@ idf.py set-target esp32
 3. Build and flash the firmware:
 ```
 idf.py build flash monitor
+```
+4. Run the server-side application:
+```
+cd project
+python run.py
 ```
