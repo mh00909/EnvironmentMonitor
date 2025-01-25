@@ -60,11 +60,11 @@
                 if (response.ok) {
                     alert("Ustawienia zapisane pomyślnie!");
                 } else {
-                    alert("Błąd podczas zapisywania ustawień.");
+                  //  alert("Błąd podczas zapisywania ustawień.");
                 }
             } catch (error) {
                 console.error("Error submitting configuration:", error);
-                alert("Błąd połączenia.");
+              //  alert("Błąd połączenia.");
             }
         });
 
@@ -85,7 +85,7 @@
                 document.getElementById('filter').value = config.filter;
                 document.getElementById('mode').value = config.mode;
             } else {
-                alert("Błąd ładowania konfiguracji BMP280.");
+                //alert("Błąd ładowania konfiguracji BMP280.");
             }
         } catch (error) {
             console.error("Błąd połączenia z /bmp280_config:", error);

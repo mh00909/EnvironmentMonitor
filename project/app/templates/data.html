@@ -8,8 +8,6 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.6.0/nouislider.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.6.0/nouislider.min.js"></script>
 
     <style>
         body {
@@ -17,218 +15,183 @@
             margin: 20px;
             background-color: #f9f9f9;
         }
+        .sensor-section {
+            margin-top: 30px;
+            margin-bottom: 30px;
+            padding: 30px;
+            border-radius: 10px;
+        }
+        .sensor-title {
+            text-align: left;
+            font-weight: bold;
+            margin-bottom: 10px;
+            margin-top: 10px;
+        }
+        .chart-container {
+            display: none;
+            margin-top: 20px;
+        }
+        .metric-status {
+            margin: 10px 0;
+        }
         canvas {
-            max-width: 100%;
-            height: auto;
+            max-width: 400px; 
+            max-height: 300px;
         }
-        h1 {
-            text-align: center;
-            color: #333;
+        .metric-status {
+            display: flex;
+            flex-direction: column;
         }
-        .card-title {
-            font-size: 18px;
+        .row {
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
         }
-        .data-item {
-            padding: 5px 10px;
-            border-bottom: 1px solid #ddd;
-        }
-        .data-item.temperature {
-            background-color: #ffe5e5;
-        }
-        .data-item.pressure {
-            background-color: #e5f3ff;
-        }
-        .data-item.light {
-            background-color: #e5ffe5;
-        }
-        
 
+        .data {
+            width: 300px;
+            height: 150px; 
+            aspect-ratio: 1.8;
+            --g: radial-gradient(50% 50%, #000 98%, #0000) no-repeat;
+            mask: var(--g) 100% 100%/30% 60%,var(--g) 70% 0/50% 100%,var(--g) 0 100%/36% 68%,var(--g) 27% 18%/26% 40%,linear-gradient(#000 0 0) bottom/67% 58% no-repeat;
+            background: #6eb4ff;
+        }
+        .metric-label {
+            font-weight: bold;
+            color: white; 
+            display: block; 
+            text-align: center;
+            margin-top: 60px;
+            font-size: 18px;
+            text-shadow: 1px 1px 10px rgba(35, 72, 128, 0.9);
+        }
+        .metric-value {
+            margin-top: 5px; 
+            color: white; 
+            font-size: 36px;
+            text-align: center;
+            text-shadow: 1px 1px 10px rgba(35, 72, 128, 0.9);
+        }
+        hr {
+            color: #007bff;
+            height: 15px;
+        }
+        hr.thick-border {
+            border: 5px solid #007bff;
+        }
     </style>
 </head>
 <body>
 
-    <div class="container mt-4">
-        <h1 class="text-center text-primary">Monitor środowiskowy</h1>
+    <div class="container">
+        <h1 class="text-center text-primary">⛅ Monitor Środowiskowy</h1>
 
-        <div class="row text-center my-4">
-            <div class="col">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">Temperatura</h5>
-                        <p id="temperature-status" class="card-text display-6">-</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">Ciśnienie</h5>
-                        <p id="pressure-status" class="card-text display-6">-</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">Światło</h5>
-                        <p id="light-status" class="card-text display-6">-</p>
-                    </div>
-                </div>
-            </div>
-   
-            <div class="col">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">BLE Temperatura</h5>
-                        <p id="ble-temperature-status" class="card-text display-6">-</p>
-                    </div>
-                </div>
-            </div>
+        {% for device, sensors in user_sensors.items() %}
+        <div class="card sensor-section">
+            <h3 class="text-secondary">Urządzenie: {{ device }}</h3>
             
-            <div class="col">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">BLE Wilgotność</h5>
-                        <p id="ble-humidity-status" class="card-text display-6">-</p>
+            {% for sensor, metrics in sensors.items() %}
+            <hr>
+            <div class="center">
+                <div class="sensor-title" style="color: #525252;">{{ sensor_labels[sensor] if sensor in sensor_labels else sensor }}</div>
+            
+            <div class="row">
+                {% for metric in metrics %}
+                <div class="col-md-4 metric-status">
+                    <div class="d-flex align-items-center">
+                        <div class="data">
+                            <span class="metric-label d-block">{{ metric_labels[metric] if metric in metric_labels else metric }}:</span>
+                            <p id="{{ device }}-{{ sensor }}-{{ metric }}-status" class="metric-value m-0">-</p>
+                        </div>
+                        
                     </div>
                 </div>
+                {% endfor %}
             </div>
+            </div>
+            <button class="btn btn-secondary" style="width:40px" onclick="toggleCharts('{{ device }}-{{ sensor }}')"><i class="fa-solid fa-chart-line"></i></button>
+            
+            <div id="{{ device }}-{{ sensor }}-charts" class="chart-container">
+                {% for metric in metrics %}
+                <canvas id="{{ device }}-{{ sensor }}-{{ metric }}-chart"></canvas>
+                {% endfor %}
+            </div>
+            {% endfor %}
         </div>
-
-      
-        <div class="row mt-4">
-            <div class="col text-center">
-                <canvas id="temperatureChart"></canvas>
-            </div>
-            <div class="col text-center">
-                <canvas id="pressureChart"></canvas>
-            </div>
-            <div class="col text-center">
-                <canvas id="lightChart"></canvas>
-            </div>
-            <div class="col text-center">
-                <canvas id="bleTemperatureChart"></canvas>
-            </div>
-            <div class="col text-center">
-                <canvas id="bleHumidityChart"></canvas>
-            </div>
-        </div>
-
-        <div class="text-end my-3">
-            <button id="toggle-log-button" class="btn btn-primary mt-2" onclick="toggleLogs()">
-                <i class="fas fa-list"></i> Logi
-            </button>
-        </div>
-
-        <div id="log-section" class="card" style="display: none;">
-            <div class="card-header">
-                Logi
-            </div>
-            <div class="card-body" id="data-container" style="max-height: 250px; overflow-y: auto;">
-            </div>
-            <div class="card-footer text-end">
-                <button class="btn btn-danger" onclick="clearLogs()">Wyczyść logi</button>
-            </div>
-        </div>
+        {% endfor %}
     </div>
-    
-    
-    
-    
+
     <script>
         const socket = io();
-        const temperatureStatus = document.getElementById('temperature-status');
-        const pressureStatus = document.getElementById('pressure-status');
-        const lightStatus = document.getElementById('light-status');
-        const bleTemperatureStatus = document.getElementById('ble-temperature-status');
-        const bleHumidityStatus = document.getElementById('ble-humidity-status');
 
-        const dataContainer = document.getElementById('data-container');
+        // Konwersja danych z backendu
+        const userSensors = JSON.parse('{{ user_sensors | tojson | safe }}');
 
-        const temperatureSlider = document.getElementById('temperatureSlider');
-        const lightSlider = document.getElementById('lightSlider');
-
-        // Inicjalizacja wykresów
-        const temperatureChart = new Chart(document.getElementById('temperatureChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Temperatura (°C)', data: [], borderColor: 'red', tension: 0.1 }] }
-        });
-        const pressureChart = new Chart(document.getElementById('pressureChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Ciśnienie (hPa)', data: [], borderColor: 'blue', tension: 0.1 }] }
-        });
-        const lightChart = new Chart(document.getElementById('lightChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Światło (lux)', data: [], borderColor: 'green', tension: 0.1 }] }
-        });
-        const bleTemperatureChart = new Chart(document.getElementById('bleTemperatureChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'BLE Temperatura (°C)', data: [], borderColor: 'orange', tension: 0.1 }] }
-        });
-        const bleHumidityChart = new Chart(document.getElementById('bleHumidityChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'BLE Wilgotność (%)', data: [], borderColor: 'purple', tension: 0.1 }] }
-        });
-
-        function updateChart(chart, label, data) {
-            if (chart.data.labels.length > 50) {
-                chart.data.labels.shift();
-                chart.data.datasets[0].data.shift();
-            }
-            chart.data.labels.push(label);
-            chart.data.datasets[0].data.push(data);
-            chart.update();
+        // Funkcja do pokazywania/ukrywania wykresów
+        function toggleCharts(sensorId) {
+            const container = document.getElementById(`${sensorId}-charts`);
+            container.style.display = container.style.display === "none" || container.style.display === "" ? "block" : "none";
         }
 
+        // Inicjalizacja wykresów
+        const charts = {};
+        for (const device in userSensors) {
+            for (const sensor in userSensors[device]) {
+                for (const metric of userSensors[device][sensor]) {
+                    const canvasId = `${device}-${sensor}-${metric}-chart`;
+                    const ctx = document.getElementById(canvasId).getContext('2d');
+                    charts[canvasId] = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: [],
+                            datasets: [
+                                {
+                                    label: `${metric} (${sensor})`,
+                                    data: [],
+                                    borderColor: 'blue',
+                                    tension: 0.1,
+                                },
+                            ],
+                        },
+                    });
+                }
+            }
+        }
+
+        // Obsługa wiadomości MQTT
         socket.on('mqtt_message', function (message) {
             const topic = message.topic;
             const data = message.data;
             const timestamp = new Date().toLocaleTimeString();
 
-            if (topic.includes('bmp280/temperature')) {
-                temperatureStatus.textContent = `${data.temperature} °C`;
-                updateChart(temperatureChart, timestamp, data.temperature);
-            } else if (topic.includes('bmp280/pressure')) {
-                pressureStatus.textContent = `${data.pressure} hPa`;
-                updateChart(pressureChart, timestamp, data.pressure);
-            } else if (topic.includes('light')) {
-                lightStatus.textContent = `${data.light} lux`;
-                updateChart(lightChart, timestamp, data.light);
-            }
-            if (topic.includes('ble/temperature')) {
-                bleTemperatureStatus.textContent = `${data.temperature} °C`;
-                updateChart(bleTemperatureChart, timestamp, data.temperature);
-            } else if (topic.includes('ble/humidity')) {
-                bleHumidityStatus.textContent = `${data.humidity} %`;
-                updateChart(bleHumidityChart, timestamp, data.humidity);
+            console.log("Received message:", message);
+
+            // Generuj ID statusu i wykresu
+            const parts = topic.split('/').slice(2); // Pomijaj pierwsze dwa segmenty
+            const statusId = parts.join('-') + '-status';
+            const chartId = statusId.replace('-status', '-chart');
+
+            // Aktualizacja statusu
+            const statusElement = document.getElementById(statusId);
+            if (statusElement) {
+                const metricKey = Object.keys(data)[0];
+                statusElement.textContent = `${data[metricKey]} ${metricKey === 'temperature' ? '°C' : metricKey === 'pressure' ? 'hPa' : metricKey === 'light' ? 'lux' : ''}`;
             }
 
-            const element = document.createElement('div');
-            element.classList.add('data-item');
-            element.textContent = `Topic: ${topic}, Data: ${JSON.stringify(data)}`;
-            dataContainer.appendChild(element);
+            // Aktualizacja wykresu
+            const chart = charts[chartId];
+            if (chart) {
+                const metricKey = Object.keys(data)[0];
+                if (chart.data.labels.length > 50) {
+                    chart.data.labels.shift();
+                    chart.data.datasets[0].data.shift();
+                }
+                chart.data.labels.push(timestamp);
+                chart.data.datasets[0].data.push(data[metricKey]);
+                chart.update();
+            }
         });
-
-        function clearLogs() {
-            dataContainer.innerHTML = '';
-        }
-
-        function toggleLogs() {
-            const logSection = document.getElementById('log-section');
-            const toggleButton = document.getElementById('toggle-log-button');
-
-            if (logSection.style.display === 'none') {
-                logSection.style.display = 'block';
-                toggleButton.innerHTML = '<i class="fas fa-list"></i> Hide Logs';
-            } else {
-                logSection.style.display = 'none';
-                toggleButton.innerHTML = '<i class="fas fa-list"></i> Show Logs';
-            }
-        }
-
-
-        
-
     </script>
+
 </body>
 </html>

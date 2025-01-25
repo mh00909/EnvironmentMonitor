@@ -537,6 +537,9 @@ void app_main(void) {
     ESP_LOGI("MAIN", "Tworzenie taska monitorującego warunki środowiskowe...");
     xTaskCreate(&monitor_conditions_task, "monitor_conditions_task", 8192, NULL, 3, NULL);
 
+    load_light_range_from_nvs(&min_light_threshold, &max_light_threshold);
+    load_temperature_range_from_nvs(&min_temperature_threshold, &max_temperature_threshold);
+
 
     ESP_LOGI("MAIN", "Inicjalizacja zakończona pomyślnie.");
 

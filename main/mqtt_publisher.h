@@ -5,10 +5,6 @@
 
 
 
-
-
-
-
 #define MAX_USERS 5
 #define MAX_DEVICES 3
 #define MAX_SENSORS 5
@@ -97,4 +93,9 @@ void subscribe_all_users();
 void publish_ble_data(const char *user, const char *device);
 void publish_light_sensor_data(const char *user, const char *device);
 void publish_bmp280_data(const char *user, const char *device);
+
+void save_light_range_to_nvs(int min_light, int max_light);
+void save_temperature_range_to_nvs(float min_temp, float max_temp);
+void load_light_range_from_nvs(int *min_light, int *max_light);
+void load_temperature_range_from_nvs(float *min_temp, float *max_temp);
 #endif

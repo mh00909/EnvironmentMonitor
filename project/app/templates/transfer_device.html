@@ -8,7 +8,7 @@
 </head>
 <body>
     <div class="container mt-5">
-        <h1 class="text-center">Transfer Device</h1>
+        <h1 class="text-center">Przenieś urządzenie</h1>
         <hr>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -22,7 +22,7 @@
         
         <form method="POST" action="{{ url_for('devices.transfer_device') }}">
             <div class="mb-3">
-                <label for="device_id" class="form-label">Device ID:</label>
+                <label for="device_id" class="form-label">ID urządzenia:</label>
                 <select class="form-select" id="device_id" name="device_id" required>
                     {% for device in user_devices %}
                         <option value="{{ device }}">{{ device }}</option>
@@ -30,11 +30,11 @@
                 </select>
             </div>
             <div class="mb-3">
-                <label for="new_owner_email" class="form-label">New Owner's Email:</label>
+                <label for="new_owner_email" class="form-label">E-mail nowego klienta:</label>
                 <input type="email" class="form-control" id="new_owner_email" name="new_owner_email" required>
             </div>
-            <button type="submit" class="btn btn-primary">Transfer</button>
-            <a href="{{ url_for('auth.account_settings') }}" class="btn btn-secondary">Back</a>
+            <button type="submit" class="btn btn-primary">Przenieś</button>
+            <a href="{{ url_for('auth.account_settings') }}" class="btn btn-secondary">Powrót</a>
         </form>
     </div>
 </body>

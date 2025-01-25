@@ -121,11 +121,11 @@
                     const data = await response.json();
                     alert(data.message);
                 } else {
-                    alert("Nie udało się przełączyć na tryb STA.");
+                   // alert("Nie udało się przełączyć na tryb STA.");
                 }
             } catch (error) {
                 console.error("Błąd podczas komunikacji z ESP32:", error);
-                alert("Błąd połączenia z ESP32.");
+               // alert("Błąd połączenia z ESP32.");
             }
         }
     </script>

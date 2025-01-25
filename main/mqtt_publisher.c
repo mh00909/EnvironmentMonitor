@@ -15,6 +15,8 @@
 #include "wifi_station.h"
 #include "esp_netif.h"
 #include "bmp280.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 #include "i2c_driver.h"
 #include "mqtt_publisher.h"
 #include "freertos/FreeRTOS.h"
@@ -109,19 +111,47 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 
             if (strncmp(event->topic, "/system/settings/temp_range", event->topic_len) == 0) {
-                float min_temp, max_temp;
-                sscanf(event->data, "{\"min_temperature\":%f,\"max_temperature\":%f}", &min_temp, &max_temp);
-                
-                min_temperature_threshold = min_temp;
-                max_temperature_threshold = max_temp;
-                printf("Updated temperature range: Min=%.2f, Max=%.2f\n", min_temperature_threshold, max_temperature_threshold);
+                cJSON *root = cJSON_Parse(event->data);
+                if (!root) {
+                    ESP_LOGE(TAG, "Błąd parsowania JSON dla temp_range.");
+                    return;
+                }
+                cJSON *min_temp = cJSON_GetObjectItem(root, "min_temperature");
+                cJSON *max_temp = cJSON_GetObjectItem(root, "max_temperature");
+                if (cJSON_IsNumber(min_temp) && cJSON_IsNumber(max_temp)) {
+                    min_temperature_threshold = min_temp->valueint;
+                    max_temperature_threshold = max_temp->valueint;
+                    save_temperature_range_to_nvs(min_temperature_threshold, max_temperature_threshold);
+                ESP_LOGI(TAG, "Zakres temperatury zapisany: Min=%f, Max=%f", min_temperature_threshold, max_temperature_threshold);
+                } else {
+                    ESP_LOGE(TAG, "Nieprawidłowe dane w JSON dla temp_range.");
+                }
+
+                cJSON_Delete(root);
+
             } else if (strncmp(event->topic, "/system/settings/light_range", event->topic_len) == 0) {
-                int min_light, max_light;
-                sscanf(event->data, "{\"min_light\":%d,\"max_light\":%d}", &min_light, &max_light);
-                min_light_threshold = min_light;
-                max_light_threshold = max_light;
-                printf("Updated light range: Min=%d, Max=%d\n", min_light_threshold, max_light_threshold);
+                cJSON *root = cJSON_Parse(event->data);
+                if (!root) {
+                    ESP_LOGE(TAG, "Błąd parsowania JSON dla light_range.");
+                    return;
+                }
+
+                cJSON *min_light = cJSON_GetObjectItem(root, "min_light");
+                cJSON *max_light = cJSON_GetObjectItem(root, "max_light");
+
+                if (cJSON_IsNumber(min_light) && cJSON_IsNumber(max_light)) {
+                    min_light_threshold = min_light->valueint;
+                    max_light_threshold = max_light->valueint;
+                    
+                    save_light_range_to_nvs(min_light_threshold, max_light_threshold);
+                    ESP_LOGI(TAG, "Zakres światła zapisany: Min=%d, Max=%d", min_light_threshold, max_light_threshold);
+                } else {
+                    ESP_LOGE(TAG, "Nieprawidłowe dane w JSON dla light_range.");
+                }
+
+                cJSON_Delete(root);
             }
+
 
 
             else if (strcmp(topic, "/system/add_client") == 0) {
@@ -737,4 +767,107 @@ void handle_add_metric(const char *data) {
     }
 
     cJSON_Delete(root);
+}
+
+void save_light_range_to_nvs(int min_light, int max_light) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open("settings", NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd otwierania NVS: %s", esp_err_to_name(err));
+        return;
+    }
+
+    err = nvs_set_i32(nvs_handle, "min_light", min_light);
+    if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd zapisu min_light: %s", esp_err_to_name(err));
+    }
+
+    err = nvs_set_i32(nvs_handle, "max_light", max_light);
+    if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd zapisu max_light: %s", esp_err_to_name(err));
+    }
+
+    err = nvs_commit(nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd zapisu danych do pamięci NVS: %s", esp_err_to_name(err));
+    }
+
+    nvs_close(nvs_handle);
+    ESP_LOGI("NVS", "Zakres światła zapisany: Min=%d, Max=%d", min_light, max_light);
+}
+
+void save_temperature_range_to_nvs(float min_temp, float max_temp) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open("settings", NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd otwierania NVS: %s", esp_err_to_name(err));
+        return;
+    }
+
+    err = nvs_set_blob(nvs_handle, "temp_range", &min_temp, sizeof(min_temp));
+    if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd zapisu temp_range: %s", esp_err_to_name(err));
+    }
+
+    err = nvs_set_blob(nvs_handle, "temp_range_max", &max_temp, sizeof(max_temp));
+    if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd zapisu max temp blob: %s", esp_err_to_name(err));
+    }
+
+    nvs_close(nvs_handle);
+}
+
+
+void load_light_range_from_nvs(int *min_light, int *max_light) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open("settings", NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd otwierania NVS: %s", esp_err_to_name(err));
+        return;
+    }
+
+    err = nvs_get_i32(nvs_handle, "min_light", min_light);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW("NVS", "Nie znaleziono min_light w NVS, ustawienie wartości domyślnej.");
+        *min_light = 0;  // Wartość domyślna
+    } else if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd odczytu min_light: %s", esp_err_to_name(err));
+    }
+
+    err = nvs_get_i32(nvs_handle, "max_light", max_light);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW("NVS", "Nie znaleziono max_light w NVS, ustawienie wartości domyślnej.");
+        *max_light = 1000;  // Wartość domyślna
+    } else if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd odczytu max_light: %s", esp_err_to_name(err));
+    }
+
+    nvs_close(nvs_handle);
+    ESP_LOGI("NVS", "Odczytano zakres światła: Min=%d, Max=%d", *min_light, *max_light);
+}
+
+void load_temperature_range_from_nvs(float *min_temp, float *max_temp) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open("settings", NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd otwierania NVS: %s", esp_err_to_name(err));
+        return;
+    }
+
+    size_t size = sizeof(float);
+    err = nvs_get_blob(nvs_handle, "temp_range", min_temp, &size);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW("NVS", "Nie znaleziono temp_range w NVS, ustawienie wartości domyślnej.");
+        *min_temp = 0.0f;  // Wartość domyślna
+    } else if (err != ESP_OK) {
+        ESP_LOGE("NVS", "Błąd odczytu temp_range: %s", esp_err_to_name(err));
+    }
+
+    err = nvs_get_blob(nvs_handle, "temp_range_max", max_temp, &size);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW("NVS", "Nie znaleziono temp_range max, ustawienie wartości domyślnej.");
+        *max_temp = 50;  // Wartość domyślna
+    }
+
+    nvs_close(nvs_handle);
 }

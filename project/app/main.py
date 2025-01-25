@@ -121,7 +121,7 @@ def create_app():
             else:
                 return jsonify({"message": "Nie udało się przełączyć ESP32 do trybu Station."}), 500
         except requests.exceptions.RequestException as e:
-            print(f"Błąd podczas łączenia z ESP32: {e}")
+         #   print(f"Błąd podczas łączenia z ESP32: {e}")
             return jsonify({"message": "Nie udało się połączyć z ESP32."}), 500
 
   

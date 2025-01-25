@@ -42,7 +42,8 @@
         "power_manager.h": "c",
         "ota_update.h": "c",
         "esp_wifi.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "stdio.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc",
     "idf.gitPath": "git"

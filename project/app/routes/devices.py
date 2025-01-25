@@ -98,7 +98,45 @@ def add_sensor_form():
 
 @devices_bp.route('/devices/data', methods=['GET'])
 def render_data():
-    return render_template('data.html')
+    if 'user_id' not in session:
+        return redirect(url_for('auth.login'))
+
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Pobierz urządzenia użytkownika
+    cursor.execute('SELECT device_id FROM devices WHERE user_id = ?', (user_id,))
+    devices = [row['device_id'] for row in cursor.fetchall()]
+
+    # Pobierz czujniki i metryki dla każdego urządzenia
+    user_sensors = {}
+    for device in devices:
+        cursor.execute('SELECT sensor_type FROM sensors WHERE user_id = ? AND device_id = ?', (user_id, device))
+        user_sensors[device] = {}
+        for row in cursor.fetchall():
+            sensor_type = row['sensor_type']
+            cursor.execute(
+                'SELECT metric FROM metrics WHERE user_id = ? AND device_id = ? AND sensor_type = ?',
+                (user_id, device, sensor_type)
+            )
+            user_sensors[device][sensor_type] = [metric_row['metric'] for metric_row in cursor.fetchall()]
+
+    sensor_labels = {
+        "ble": "Termometr BLE",
+        "bmp280": "Czujnik BMP280",
+        "temperature": "Temperatura",
+        "photoresistor": "Fotorezystor"
+    }
+    metric_labels = {
+        "temperature": "🌡️ Temperatura",
+        "humidity": "💧 Wilgotność",
+        "light": "💡 Natężenie światła",
+        "pressure": "💨 Ciśnienie atmosferyczne"
+    }
+
+    conn.close()
+    return render_template('data.html', user_sensors=user_sensors, sensor_labels=sensor_labels, metric_labels=metric_labels)
 
 
 @devices_bp.route('/devices/add-sensor', methods=['POST'])
