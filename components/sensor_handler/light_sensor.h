@@ -4,10 +4,10 @@
 #include <stdint.h>
 
 #define ADC_MAX_VALUE 4095.0
-#define V_REF 3.3
-#define R_PULLDOWN 10000.0 // w Ohmach
-#define A 500 // Współczynnik kalibracji
-#define N 0.7 // Wykładnik zależności
+#define V_REF 3.3 // Napięcie ESP32
+#define R_PULLDOWN 10000.0 // Rezystancja rezystora
+#define A 500 // Skala kalibracji
+#define N 0.7 // Wykładnik zależności rezystancji od natężenia światła
 
 #define LIGHT_SENSOR_ADC_CHANNEL ADC1_CHANNEL_5 // GPIO 33 
 #define LED1_GPIO 19

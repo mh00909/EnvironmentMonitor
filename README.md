@@ -1,9 +1,9 @@
 ## ESP32 Environment Monitor
  
-### 📋 Overview
+### Overview
 The ESP32 Environment Monitor is an IoT-based project designed to monitor environmental parameters using sensors connected to an ESP32 microcontroller. It features Wi-Fi, BLE, and MQTT capabilities for real-time data sharing and configuration. The monitor collects data on temperature, pressure, light levels, and BLE-based humidity/temperature and provides a dashboard and API for data visualization and control.
 
-### 🎯 Features
+### Features
 **Sensor Monitoring:**
 
 - Temperature and pressure using the BMP280 sensor (I2C communication).
@@ -24,9 +24,9 @@ The ESP32 Environment Monitor is an IoT-based project designed to monitor enviro
 **User Interactions:**
 
 - Button-based manual measurement trigger.
-- Configurable thresholds for alerts (e.g., temperature and light).
+- Configurable thresholds for alerts (temperature and light).
 
-### 🛠️ Components Used
+### Components Used
 
 - **ESP32 Microcontroller**
 - **Sensors:**
@@ -67,7 +67,7 @@ The ESP32 Environment Monitor is an IoT-based project designed to monitor enviro
 ### Installation
 1. Clone the repository:
 ```
-git clone https://github.com/mh00909/monitor-srodowiskowy.git
+git clone https://github.com/mh00909/EnvironmentMonitor.git
 ```
 2. Configure the ESP-IDF environment:
 ```

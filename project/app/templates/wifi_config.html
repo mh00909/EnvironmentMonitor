@@ -33,13 +33,13 @@
                     document.getElementById('status-message').textContent = `ESP32 działa w trybie AP. IP: ${data.ip}`;
                 } else {
                     document.getElementById('status-message').textContent = "ESP32 nie działa w trybie AP. Połącz się z odpowiednią siecią Wi-Fi.";
-                    document.getElementById('wifiForm').style.display = 'none'; // Ukryj formularz
+                    document.getElementById('wifiForm').style.display = 'none'; 
                 }
             })
             .catch(error => {
                 console.error("Błąd połączenia z API /sync_mode:", error);
                 document.getElementById('status-message').textContent = "Nie udało się połączyć z ESP32.";
-                document.getElementById('wifiForm').style.display = 'none'; // Ukryj formularz
+                document.getElementById('wifiForm').style.display = 'none'; 
             });
     </script>
     

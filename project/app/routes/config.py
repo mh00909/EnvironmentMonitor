@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, render_template
 import requests
-from app.mqtt_handler import mqtt_client  # Import klienta MQTT
+from app.mqtt_handler import mqtt_client  
 import json
 
 

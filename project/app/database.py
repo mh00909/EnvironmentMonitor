@@ -25,7 +25,6 @@ def init_db():
     ''')
 
     # Tabela urządzeń
-    # Tabela urządzeń
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS devices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

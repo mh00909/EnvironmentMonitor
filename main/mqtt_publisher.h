@@ -11,23 +11,23 @@
 #define MAX_METRICS 6
 
 typedef struct {
-    char metric[50]; // Nazwa metryki, np. "temperature", "pressure"
+    char metric[50]; // Nazwa metryki
 } metric_t;
 
 typedef struct {
-    char sensor_type[50]; // Typ sensora, np. "bmp280", "photoresistor"
+    char sensor_type[50]; // Typ sensora
     metric_t metrics[MAX_METRICS]; // Metryki sensora
     int metric_count; // Liczba metryk
 } sensor_t;
 
 typedef struct {
-    char device_id[50]; // ID urządzenia, np. "device1"
+    char device_id[50]; // ID urządzenia
     sensor_t sensors[MAX_SENSORS]; // Sensory urządzenia
     int sensor_count; // Liczba sensorów
 } device_t;
 
 typedef struct {
-    char user_id[50]; // ID użytkownika, np. "user1"
+    char user_id[50]; // ID użytkownika
     device_t devices[MAX_DEVICES]; // Urządzenia użytkownika
     int device_count; // Liczba urządzeń
 } user_t;
@@ -52,11 +52,8 @@ extern int min_light_threshold;
 extern int max_light_threshold;
 
 void mqtt_initialize(void);
-//void publish_data(esp_mqtt_client_handle_t client, const char *user, const char *device);
 void mqtt_stop();
 void initialize_mqtt_mutex();
-//void safe_publish(client_info_t *client, const char *topic, const char *data);
-
 void ble_data_task(void *pvParameters);
 void set_temperature_range(float min_temp, float max_temp);
 void set_light_range(int min_light, int max_light);

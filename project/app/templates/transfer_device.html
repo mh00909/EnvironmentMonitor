@@ -10,15 +10,7 @@
     <div class="container mt-5">
         <h1 class="text-center">Przenieś urządzenie</h1>
         <hr>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="alert alert-dismissible fade show">
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}">{{ message }}</div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        {% endwith %}
+      
         
         <form method="POST" action="{{ url_for('devices.transfer_device') }}">
             <div class="mb-3">

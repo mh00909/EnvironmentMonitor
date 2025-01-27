@@ -218,7 +218,6 @@ def register_device():
                        (user_id, 'transferred', device_id))
         conn.commit()
 
-        # Logowanie przeniesienia urządzenia
         cursor.execute('INSERT INTO device_logs (device_id, action, old_user_id, new_user_id) VALUES (?, ?, ?, ?)',
                        (device_id, 'transfer', current_owner, user_id))
         conn.commit()
@@ -308,7 +307,6 @@ def transfer_device():
         cursor.execute('UPDATE metrics SET user_id = ? WHERE user_id = ? AND device_id = ?',
                        (new_owner_id, user_id, device_id))
 
-        # Opcjonalnie: Zaktualizuj subskrypcje
         cursor.execute('DELETE FROM subscriptions WHERE user_id = ? AND topic LIKE ?',
                        (user_id, f"/{user_id}/{device_id}/%"))
 
